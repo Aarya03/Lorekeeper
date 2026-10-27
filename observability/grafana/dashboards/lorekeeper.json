@@ -1,0 +1,23 @@
+{
+  "id": null,
+  "uid": "lorekeeper-live",
+  "title": "Lorekeeper · Live stream pipeline",
+  "tags": ["lorekeeper", "twitch", "eventsub"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Events by second", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}, "targets": [{"expr": "sum(rate(lorekeeper_events_total[1m]))", "legendFormat": "events / sec"}]},
+    {"id": 2, "type": "timeseries", "title": "Event projection latency", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(lorekeeper_projection_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.50, sum(rate(lorekeeper_projection_seconds_bucket[5m])) by (le))", "legendFormat": "p50"}]},
+    {"id": 3, "type": "stat", "title": "EventSub connected", "gridPos": {"x": 0, "y": 8, "w": 6, "h": 5}, "targets": [{"expr": "lorekeeper_eventsub_connected"}], "fieldConfig": {"defaults": {"min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}}}},
+    {"id": 4, "type": "timeseries", "title": "Duplicate event deliveries", "gridPos": {"x": 6, "y": 8, "w": 9, "h": 5}, "targets": [{"expr": "sum(rate(lorekeeper_duplicate_events_total[5m]))", "legendFormat": "duplicates / sec"}]},
+    {"id": 5, "type": "timeseries", "title": "Projection errors", "gridPos": {"x": 15, "y": 8, "w": 9, "h": 5}, "targets": [{"expr": "sum(rate(lorekeeper_projection_errors_total[5m]))", "legendFormat": "errors / sec"}]}
+  ],
+  "annotations": {"list": []},
+  "editable": true,
+  "liveNow": true,
+  "time": {"from": "now-30m", "to": "now"},
+  "timepicker": {},
+  "version": 1
+}

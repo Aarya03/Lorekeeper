@@ -1,0 +1,7 @@
+websockets>=13.0,<16.0
+cryptography>=43.0
+python-dotenv>=1.0
+aiokafka>=0.12.0,<0.13.0
+redis>=5.0,<7.0
+prometheus-client>=0.21,<1.0
+psycopg[binary,pool]>=3.2,<4.0
