@@ -1,33 +1,121 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#101511"><title>Lorekeeper — stream memory, made magical</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101511">
+  <title>Lorekeeper - community science story game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/web/style.css"><link rel="stylesheet" href="/web/twitch.css">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('lorekeeper-theme')||'dark'}catch{document.documentElement.dataset.theme='dark'}</script>
+  <link rel="stylesheet" href="/web/style.css">
+  <link rel="stylesheet" href="/web/twitch.css">
 </head>
 <body>
 <aside class="sidebar">
-  <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>lorekeeper<small>STREAM MEMORY ENGINE</small></span></a>
-  <div class="side-label">WORKSPACE</div>
-  <button class="nav-item active" data-scroll="overview"><span class="nav-icon">◫</span>Stream desk <b class="live-dot"></b></button>
-  <button class="nav-item" data-scroll="lore-section"><span class="nav-icon">✳</span>Community lore <span class="nav-count" id="side-pending">0</span></button>
-  <button class="nav-item" data-scroll="activity-section"><span class="nav-icon">↗</span>Event timeline</button>
-  <div class="sidebar-bottom"><div class="side-label">YOUR CHANNEL</div><div class="channel"><div class="avatar">L</div><div><strong>lorekeeper_demo</strong><span id="channel-status">Replay mode</span></div><span class="chevron">⌄</span></div><div class="side-footer"><span class="green-pip"></span>Local demo · data stays here</div></div>
+  <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>lorekeeper<small>LIVE COMMUNITY SCIENCE</small></span></a>
+  <div class="side-label">STREAM</div>
+  <a class="nav-item active" href="#chapter-section"><span class="nav-icon">⌬</span>Field study</a>
+  <a class="nav-item" href="#relic-vault"><span class="nav-icon">⚛</span>Research cabinet</a>
+  <a class="nav-item" href="#lore-section"><span class="nav-icon">⌁</span>Community observations <span class="nav-count" id="side-pending" title="Pending observations">0</span></a>
+  <a class="nav-item" href="#history-section"><span class="nav-icon">↗</span>Past chapters</a>
+  <div class="sidebar-bottom">
+    <div class="side-label">YOUR CHANNEL</div>
+    <div class="channel"><div class="avatar">L</div><div><strong>lorekeeper_demo</strong><span id="channel-status">Connect Twitch</span></div><span class="chevron">⌄</span></div>
+    <div class="side-footer"><span class="green-pip"></span>Real Twitch chat · streamer-approved memories</div>
+  </div>
 </aside>
 <main class="main" id="overview">
-  <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <b>Stream desk</b></div><div class="top-actions"><div class="connection" id="connection"><i></i><span>Connect your Twitch channel</span></div><a class="connect-link" id="twitch-connect" href="/auth/connect">Connect Twitch <span>↗</span></a><button class="connect-link hide" id="twitch-retry">Retry EventSub</button><button class="connect-link hide" id="twitch-disconnect">Disconnect</button><button class="icon-button privacy-button" id="forget-button" title="Forget viewer memory">⌑</button><a class="icon-button" href="/overlay" target="_blank" title="Open OBS overlay">▧</a><button class="avatar tiny">L</button></div></header>
-  <section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="spark">✳</span> YOUR COMMUNITY, REMEMBERED</div><h1>Every stream has a story.<br><em>Keep the good parts.</em></h1><p>Lorekeeper listens to your real Twitch chat, learns the community’s running jokes, and brings memories back when they matter.</p><div class="hero-buttons"><a class="button primary" id="connect-hero" href="/auth/connect"><span>↗</span> Connect Twitch</a><button class="button ghost" id="start-replay">Try a replay</button><button class="button ghost" id="recap-button">✦ &nbsp;Play “Previously on…”</button></div></div><div class="mascot-art"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="star s1">✦</div><div class="star s2">✳</div><div class="star s3">·</div><div class="mascot"><div class="ear left"></div><div class="ear right"></div><div class="face"><div class="eye e1"></div><div class="eye e2"></div><div class="cheek c1"></div><div class="cheek c2"></div><div class="mouth"></div><div class="shine"></div></div><div class="scarf"></div></div><div class="speech-tag">“the toaster lore lives on”</div><div class="mascot-caption"><span class="live-dot"></span> Your tiny keeper of lore</div></div></section>
-  <section class="stats-row"><div class="stat-card"><div class="stat-top"><span>EVENTS REMEMBERED</span><span class="stat-icon">⌁</span></div><div class="stat-value" id="stat-events">0</div><div class="stat-foot">Since this demo began</div></div><div class="stat-card"><div class="stat-top"><span>COMMUNITY LORE</span><span class="stat-icon">✳</span></div><div class="stat-value"><span id="stat-lore">0</span><small> memories</small></div><div class="stat-foot"><b class="tiny-green">●</b> <span id="stat-pending">0</span> waiting for your review</div></div><div class="stat-card"><div class="stat-top"><span>MASCOT MOMENTS</span><span class="stat-icon">♡</span></div><div class="stat-value" id="stat-reactions">0</div><div class="stat-foot">Calm, considered, on-brand</div></div><div class="stat-card"><div class="stat-top"><span>EVENT PIPELINE</span><span class="stat-icon">⌘</span></div><div class="stat-value"><span class="pipeline-state"><i></i><span id="pipeline-label">READY</span></span></div><div class="stat-foot" id="uptime">Replay engine standing by</div></div></section>
-  <section class="desk-grid">
-   <div class="panel lore-panel" id="lore-section"><div class="panel-head"><div><div class="panel-title">Lore to review <span class="count-pill" id="pending-pill">0</span></div><div class="panel-sub">You decide what becomes part of the story.</div></div><button class="text-button" id="view-all">View all <span>↗</span></button></div><div id="lore-list" class="lore-list"></div><div class="empty-state" id="lore-empty"><div class="empty-symbol">✳</div><strong>The archive is waiting for a story.</strong><span>Play the demo and Lorekeeper will find a running gag.</span></div></div>
-   <div class="panel mascot-panel"><div class="panel-head"><div><div class="panel-title">On-stream mascot</div><div class="panel-sub">What your viewers see.</div></div><span class="mini-status"><i></i> OVERLAY LIVE</span></div><div class="overlay-preview"><div class="preview-stars">✧ &nbsp; · &nbsp; ✦</div><div class="preview-creature"><div class="p-ear left"></div><div class="p-ear right"></div><div class="p-face"><span></span><span></span><i></i></div><div class="p-scarf"></div></div><div class="preview-bubble" id="preview-line">Your community’s next favorite callback goes here.</div><div class="preview-footer"><span><i class="green-pip"></i> LOREKEEPER</span><span>OBS BROWSER SOURCE</span></div></div><div class="mascot-controls"><div><strong>Speech control</strong><span id="mute-caption">The keeper is ready to speak</span></div><button class="toggle" id="mute-toggle" aria-label="Mute mascot"><span></span></button></div><a href="/overlay" target="_blank" class="open-overlay">Open overlay preview <span>↗</span></a></div>
+  <header class="topbar">
+    <div class="breadcrumb">Lorekeeper <span>/</span> <b>Community science</b></div>
+    <div class="top-actions">
+      <div class="connection" id="connection"><i></i><span>Twitch not connected</span></div>
+      <a class="connect-link" id="twitch-connect" href="/auth/connect">Connect Twitch</a>
+      <button class="connect-link hide" id="twitch-retry">Retry EventSub</button>
+      <button class="connect-link hide" id="twitch-disconnect">Disconnect</button>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light mode" title="Switch to light mode"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
+      <button class="icon-button privacy-button" id="forget-button" title="Forget viewer memory">⌑</button>
+      <a class="icon-button" href="/overlay" target="_blank" title="Open OBS overlay">▣</a>
+    </div>
+  </header>
+  <section class="hero story-hero">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="spark">⌬</span> A SCIENCE STORY YOUR COMMUNITY SHAPES</div>
+      <h1>Chat turns discoveries<br><em>into lore bosses.</em></h1>
+      <p>A strange result, running experiment, or shared discovery becomes a research charm and a fictional boss. Chat chooses the charm's fate, then takes on the lore boss together in real Twitch chat.</p>
+      <div class="hero-buttons">
+        <button class="button primary" id="start-chapter">Start a field study</button>
+        <a class="button ghost" href="/overlay" target="_blank">Open stream overlay</a>
+        <a class="button ghost hide" id="connect-hero" href="/auth/connect">Connect Twitch</a>
+      </div>
+    </div>
+    <div class="mascot-art" aria-hidden="true"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="star s1">✦</div><div class="star s2">✳</div><div class="mascot"><div class="ear left"></div><div class="ear right"></div><div class="face"><div class="eye e1"></div><div class="eye e2"></div><div class="cheek c1"></div><div class="cheek c2"></div><div class="mouth"></div><div class="shine"></div></div><div class="scarf"></div></div><div class="mascot-caption"><span class="live-dot"></span> Your field-study guide</div></div>
   </section>
-  <section class="lower-grid"><div class="panel timeline-panel" id="activity-section"><div class="panel-head"><div><div class="panel-title">Stream timeline</div><div class="panel-sub">A living record of your community’s moments.</div></div><span class="timeline-live"><i class="live-dot"></i> LIVE FEED</span></div><div class="timeline-chart"><div class="chart-labels"><span>ACTIVE</span><span>EVENT PULSE</span><span>NOW</span></div><svg viewBox="0 0 700 88" preserveAspectRatio="none" id="chart"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a9dc7e" stop-opacity=".28"/><stop offset="1" stop-color="#a9dc7e" stop-opacity="0"/></linearGradient></defs><path class="chart-fill" d="M0,74 L0,70 L60,67 L100,70 L144,56 L176,67 L215,62 L250,69 L290,49 L328,61 L367,57 L399,67 L436,42 L470,61 L510,52 L542,65 L570,25 L600,57 L634,43 L662,58 L700,31 L700,88 L0,88Z"/><path class="chart-line" d="M0,70 L60,67 L100,70 L144,56 L176,67 L215,62 L250,69 L290,49 L328,61 L367,57 L399,67 L436,42 L470,61 L510,52 L542,65 L570,25 L600,57 L634,43 L662,58 L700,31"/></svg><div class="chart-times"><span>12:04</span><span>12:10</span><span>12:16</span><span>12:22</span><span>NOW</span></div></div><div class="moment-strip" id="moment-strip"><div class="moment-marker"><span>✳</span><div><b>Moments appear as your chat comes alive</b><small>Hype spikes are detected automatically</small></div></div></div></div>
-   <div class="panel event-panel"><div class="panel-head"><div><div class="panel-title">Recent events</div><div class="panel-sub">The heartbeat behind the magic.</div></div><span class="live-feed"><i></i> STREAMING</span></div><div class="event-list" id="event-list"></div><div class="event-empty" id="event-empty">Your event log is ready for its first story.</div></div></section>
-  <footer><span>Made for communities who make the stream.</span><span><a href="/overlay" target="_blank">OBS overlay</a><span class="footer-dot">·</span><a href="http://localhost:3000" target="_blank">Grafana</a><span class="footer-dot">·</span><a href="http://localhost:9090" target="_blank">Prometheus</a><span class="footer-dot">·</span><a href="https://twitchcon-codex.devpost.com/" target="_blank">Codex × TwitchCon</a></span></footer>
+
+  <section class="chapter-console panel" id="chapter-section">
+    <div class="panel-head"><div><div class="panel-title">Field study · choose the charm's path <span class="count-pill" id="chapter-status">READY</span></div><div class="panel-sub">Approve a real community observation to seed the story. Chat then votes how its matching research charm enters the lore-boss encounter.</div></div></div>
+    <div id="chapter-empty" class="chapter-empty"><div class="empty-symbol">⌬</div><strong>Approve a community observation to seed the first field study.</strong><span>Review the Community Observations panel, approve a specific chat moment, then start the field study.</span></div>
+    <div id="chapter-live" class="chapter-live hide">
+      <div class="chapter-heading"><span class="chapter-kicker" id="chapter-title">FIELD STUDY 1</span><span class="chapter-clock" id="chapter-clock"></span></div>
+      <h2 id="chapter-intro"></h2>
+      <div class="memory-clue"><span>OBSERVATION FROM APPROVED COMMUNITY LORE</span><p id="chapter-seed"></p></div>
+      <div class="vote-options">
+        <article class="vote-option"><div class="vote-label"><b>A</b><div class="vote-copy"><strong id="chapter-choice-a"></strong><small id="chapter-choice-a-detail"></small></div><span id="chapter-votes-a">0</span></div><div class="vote-track"><i id="chapter-bar-a"></i></div></article>
+        <article class="vote-option"><div class="vote-label"><b>B</b><div class="vote-copy"><strong id="chapter-choice-b"></strong><small id="chapter-choice-b-detail"></small></div><span id="chapter-votes-b">0</span></div><div class="vote-track"><i id="chapter-bar-b"></i></div></article>
+      </div>
+      <div class="chapter-footer"><span id="chapter-total">0 votes</span><span id="chapter-result" class="chapter-result hide"></span><button class="button ghost chapter-close hide" id="close-chapter">Reveal the finding</button><button class="button primary hide" id="start-boss">Start lore boss encounter</button></div>
+      <p id="chapter-result-copy" class="chapter-result-copy hide"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="boss-section" style="margin-top:22px">
+    <div class="panel-head"><div><div class="panel-title">Lore boss · Signal Hunt <span class="count-pill" id="boss-status">WAITING</span></div><div class="panel-sub">A hidden word is drawn from an approved community observation. Chat finds it together through meaning, not spelling.</div></div><button class="button ghost" id="boss-replay">Preview with 200 simulated guessers</button></div>
+    <div id="boss-idle" class="chapter-empty"><strong>The field log needs an approved observation first.</strong><span>Streamer-approved lore becomes a research charm and names the fictional anomaly.</span></div>
+    <div id="boss-live" class="hide"><div class="chapter-heading"><span class="chapter-kicker" id="boss-name"></span><span class="chapter-clock" id="boss-clock"></span></div><p id="boss-epithet"></p><div class="signal-clue"><b>FIELD CLUE</b><span id="boss-clue"></span><small id="boss-hint"></small></div><div class="vote-track" style="height:14px"><i id="boss-hp-bar" style="background:linear-gradient(90deg,#f06f72,#ffba77)"></i></div><div class="chapter-footer"><span id="boss-hp"></span><span id="boss-meters"></span><span id="boss-mode"></span></div><p>In Twitch chat, enter <code>!guess WORD</code>. Meaning-based signal heat updates as the community gets warmer; exact spelling solves it.</p><div id="boss-result" class="chapter-result-copy"></div><div id="boss-feed" class="chapter-history"></div><div id="boss-leaderboard" class="chapter-history"></div></div>
+  </section>
+
+  <section class="panel relic-vault" id="relic-vault">
+    <div class="panel-head relic-vault-head"><div><div class="panel-title">The research cabinet <span class="count-pill" id="relic-count">0</span></div><div class="panel-sub">Approved observations become illustrated research charms, evidence tokens, and field notes. Chat evolves them through real encounter choices.</div><div class="relic-stream-context" id="relic-stream-context">Science-first story style</div></div></div>
+    <div id="relic-empty" class="relic-empty">Approve a community observation to create the first research charm.</div>
+    <div class="relic-grid" id="relic-grid"></div>
+  </section>
+
+  <section class="stats-row">
+    <div class="stat-card"><div class="stat-top"><span>LIVE TWITCH EVENTS</span><span class="stat-icon">⌁</span></div><div class="stat-value" id="stat-events">0</div><div class="stat-foot">Received by EventSub</div></div>
+    <div class="stat-card"><div class="stat-top"><span>APPROVED OBSERVATIONS</span><span class="stat-icon">✳</span></div><div class="stat-value"><span id="stat-lore">0</span></div><div class="stat-foot"><span id="stat-pending">0</span> waiting for streamer review</div></div>
+    <div class="stat-card"><div class="stat-top"><span>FIELD STUDIES COMPLETED</span><span class="stat-icon">◈</span></div><div class="stat-value" id="stat-chapters">0</div><div class="stat-foot">Community findings that carry forward</div></div>
+    <div class="stat-card"><div class="stat-top"><span>EVENT PIPELINE</span><span class="stat-icon">⌘</span></div><div class="stat-value"><span class="pipeline-state"><i></i><span id="pipeline-label">READY</span></span></div><div class="stat-foot" id="uptime">Waiting for Twitch</div></div>
+  </section>
+
+  <section class="desk-grid">
+    <div class="panel lore-panel" id="lore-section"><div class="panel-head"><div><div class="panel-title">Community observations <span class="count-pill" id="pending-pill">0 pending</span></div><div class="panel-sub">The local narrator turns approved observations into accessible, fictional science lore. Narrator: <strong id="narrator-status">Curated templates</strong>.</div></div></div><div id="lore-list" class="lore-list"></div><div class="empty-state" id="lore-empty"><div class="empty-symbol">⌬</div><strong>The field log is waiting for an observation.</strong><span>Share a recurring moment from your science stream; approve it before it becomes part of the investigation.</span></div></div>
+    <div class="panel mascot-panel"><div class="panel-head"><div><div class="panel-title">On-stream storyteller</div><div class="panel-sub">The overlay shows the vote, the reveal, and mascot moments.</div></div><span class="mini-status"><i></i> OVERLAY READY</span></div><div class="overlay-preview"><div class="preview-stars">✧ · ✦</div><div class="preview-creature"><div class="p-ear left"></div><div class="p-ear right"></div><div class="p-face"><span></span><span></span><i></i></div><div class="p-scarf"></div></div><div class="preview-bubble" id="preview-line">The next community choice will appear here.</div><div class="preview-footer"><span><i class="green-pip"></i> LOREKEEPER</span><span>OBS BROWSER SOURCE</span></div></div><div class="mascot-controls"><div><strong>Speech control</strong><span id="mute-caption">The keeper is ready to speak</span></div><button class="toggle" id="mute-toggle" aria-label="Mute mascot"><span></span></button></div><a href="/overlay" target="_blank" class="open-overlay">Open overlay preview <span>↗</span></a></div>
+  </section>
+
+  <section class="lower-grid">
+    <div class="panel history-panel" id="history-section"><div class="panel-head"><div><div class="panel-title">Story so far</div><div class="panel-sub">Each result becomes the next chapter's prologue.</div></div></div><div class="chapter-history" id="history-list"></div><div class="event-empty" id="history-empty">Your first chapter outcome will live here.</div></div>
+    <div class="panel event-panel"><div class="panel-head"><div><div class="panel-title">Live Twitch activity</div><div class="panel-sub">Real channel events that power the story.</div></div><span class="live-feed"><i></i> LIVE FEED</span></div><div class="event-list" id="event-list"></div><div class="event-empty" id="event-empty">Waiting for your first live event.</div></div>
+  </section>
+  <section class="panel rehearsal-panel" id="rehearsal-section">
+    <div class="panel-head"><div><div class="panel-title">Rehearsal &amp; safety</div><div class="panel-sub">Synthetic replay checks the pipeline; it does not replace the real Twitch demo.</div></div></div>
+    <div class="rehearsal-body">
+      <div class="pipeline-metrics">
+        <div><span>EVENTS / SEC</span><strong id="pipeline-eps">0</strong></div>
+        <div><span>CONSUMER LAG</span><strong id="pipeline-lag">0</strong></div>
+        <div><span>PROJECTION P95</span><strong id="pipeline-p95">Warming up</strong></div>
+      </div>
+      <div class="rehearsal-actions">
+        <button class="button ghost" id="replay-raid">Replay raid burst</button>
+        <button class="button ghost" id="replay-troll">Run safety replay</button>
+        <button class="button ghost" id="load-replay">Run 1,000-event load</button>
+      </div>
+      <div class="rehearsal-note" id="rehearsal-status">Replay traffic is marked synthetic and cannot create lore.</div>
+    <div class="privacy-note"><strong>Viewer controls</strong><span>In real Twitch chat, <code>!forgetme</code> deletes that viewer's saved lore; <code>!whatdoyouknow</code> shows what Lorekeeper remembers. Use the panic control above to mute overlay speech immediately.</span></div>
+    </div>
+  </section>
+  <footer><span>Lorekeeper turns community memory into a shared live story.</span><span><a href="/overlay" target="_blank">OBS overlay</a><span class="footer-dot">·</span><a href="http://localhost:3000" target="_blank">Grafana</a><span class="footer-dot">·</span><a href="http://localhost:9090" target="_blank">Prometheus</a><span class="footer-dot">·</span><a href="https://twitchcon-codex.devpost.com/" target="_blank">TwitchCon Hackathon</a></span></footer>
 </main>
-<div class="toast" id="toast"></div><div class="modal-backdrop" id="modal"><div class="modal"><button class="modal-close" id="modal-close">×</button><div class="modal-icon">✳</div><div class="modal-title">Choose a replay</div><p>Play a small, repeatable stream moment. No Twitch account or API key needed.</p><div class="profile-list"><button data-profile="first_stream"><span class="profile-icon">☼</span><span><b>First stream</b><small>Meet the community and discover a running gag.</small></span><span>→</span></button><button data-profile="raid"><span class="profile-icon">↗</span><span><b>The raid</b><small>A burst of chat, handled with a steady paw.</small></span><span>→</span></button><button data-profile="troll"><span class="profile-icon">⌁</span><span><b>Safety check</b><small>See the mascot ignore a prompt injection attempt.</small></span><span>→</span></button></div><div class="modal-note">Replays use the same event pipeline as live chat.</div></div></div>
-<script src="/web/app.js?v=2"></script>
+<div class="toast" id="toast"></div>
+<script src="/web/app.js?v=7"></script>
 </body></html>

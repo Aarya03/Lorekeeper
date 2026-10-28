@@ -1,6 +1,8 @@
-# Lorekeeper: An Event-Sourced AI Stream Mascot for Twitch
+# Lorekeeper: An Event-Sourced Community Story Engine for Twitch
 
 > **Codex x TwitchCon Hackathon** | Design document covering requirements, High-Level Design (HLD), Low-Level Design (LLD), trade-offs, and system design interview preparation.
+
+> **Current hackathon product direction (2026-10-29):** Lorekeeper turns streamer-approved Twitch observations into research charms, fictional lore bosses, and cooperative semantic signal hunts. The chapter vote chooses the encounter style: deploy the charm to reveal the first hint immediately, or preserve the sample to keep that hint sealed initially and extend the hunt by 20 seconds. Real chat submits `!guess WORD`; a local 768-dimensional embedding model compares guesses with the hidden lore-linked word and shares a calibrated heat band (not a global vocabulary rank). Exact spelling solves the encounter. LM Studio may generate the word and clue, with a deterministic lore-word fallback; no text-generation call is made per guess. The durable `game.actions` consumer processes only guess commands with per-viewer cooldowns, duplicate protection, persistent XP/titles, and replay support. Twitch EventSub, streamer approval, privacy controls, event logs, and observability remain core infrastructure.
 
 ---
 
@@ -25,14 +27,14 @@
 
 ## 1. Product Overview
 
-**Lorekeeper** is an AI mascot that lives on a streamer's broadcast as an OBS browser-source overlay. Unlike typical chat bots, it has **persistent community memory**:
+**Lorekeeper** is a persistent, audience-driven story engine presented by a small on-stream mascot:
 
-- It remembers inside jokes, running gags, regulars, and memorable moments.
-- It reacts to chat, follows, subs, raids, and channel point redemptions, with callbacks to past lore.
-- It detects "moments" (hype spikes, raid bursts) and drops stream markers or clips automatically.
-- It opens each stream with a **"Previously on..."** recap built from the last stream's event history.
-- The streamer curates lore through an approval dashboard, so the mascot stays on-brand.
-- Viewers can inspect and delete what the mascot knows about them.
+- The streamer approves community memories that can seed future chapters.
+- Approved memories become illustrated relics with curated powers, charges, wards, and stream-specific visual themes.
+- Viewers vote together in real Twitch chat to invoke or guard the relic; votes build resonance and evolve its visible tier.
+- The OBS overlay shows the memory, artwork, relic progression, live tally, and reveal.
+- Relic state and chapter outcomes persist so the channel develops a continuing story and collection.
+- Viewers can inspect and delete saved memories; the streamer controls what becomes a story clue.
 
 ### 1.1 Core architectural idea
 

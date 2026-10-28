@@ -3,12 +3,15 @@ from __future__ import annotations
 import os, threading
 from lorekeeper import runtime, twitch
 from lorekeeper.event_bus import EventBus
-from lorekeeper.projection import process_event
+from lorekeeper.projection import process_event, backfill_lore_embeddings
 from lorekeeper.http import Handler, LorekeeperServer
+from lorekeeper.signal_game import apply_guess as process_game_action
 
 
 def main():
     runtime.init_db()
+    embedded=backfill_lore_embeddings()
+    if embedded: print(f"Backfilled {embedded} lore vectors",flush=True)
     runtime.prune_raw_events()
     threading.Thread(target=runtime.raw_retention_worker,daemon=True,name="raw-event-retention").start()
     redis_url=os.environ.get("REDIS_URL","").strip()
@@ -19,7 +22,7 @@ def main():
         print("Redis speech limiter connected",flush=True)
     bootstrap=os.environ.get("KAFKA_BOOTSTRAP_SERVERS","").strip()
     if bootstrap:
-        runtime.event_bus=EventBus(bootstrap,process_event)
+        runtime.event_bus=EventBus(bootstrap,process_event,game_handler=process_game_action)
         runtime.event_bus.start()
         print(f"Durable event log connected: {bootstrap}",flush=True)
     twitch.restore_tokens()

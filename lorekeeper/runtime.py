@@ -31,6 +31,12 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL=os.environ.get("DATABASE_URL","").strip()
 
+def embedding_dimensions():
+    try: dimensions=int(os.environ.get("EMBEDDING_DIMENSIONS","768"))
+    except ValueError as exc: raise RuntimeError("EMBEDDING_DIMENSIONS must be an integer") from exc
+    if not 1<=dimensions<=4096: raise RuntimeError("EMBEDDING_DIMENSIONS must be between 1 and 4096")
+    return dimensions
+
 db_pool=None
 
 TOKEN_FILE = DB_PATH.parent / "twitch_tokens.bin"
@@ -39,7 +45,7 @@ lock = threading.RLock()
 
 listeners: set[queue.Queue] = set()
 
-stats = {"started_at": time.time(), "received": 0, "reactions": 0, "replay_running": False, "llm_requests": 0, "llm_fallbacks": 0}
+stats = {"started_at": time.time(), "received": 0, "reactions": 0, "replay_running": False}
 
 events_total=Counter("lorekeeper_events_total","Normalized events accepted by projection",["source","event_type"])
 
@@ -51,11 +57,11 @@ projection_latency=Histogram("lorekeeper_projection_seconds","Event projection d
 
 eventsub_connected=Gauge("lorekeeper_eventsub_connected","Whether Twitch EventSub is connected")
 
-llm_requests_metric=Counter("lorekeeper_llm_requests_total","Eligible live reaction generation requests")
-
-llm_fallbacks_metric=Counter("lorekeeper_llm_fallbacks_total","Reaction requests served by deterministic templates")
-
 redis_rate_errors=Counter("lorekeeper_redis_rate_limit_errors_total","Redis rate limiter failures with local fallback")
+
+embedding_requests=Counter("lorekeeper_embedding_requests_total","Lore candidates embedded by the configured provider",["provider"])
+
+embedding_fallbacks=Counter("lorekeeper_embedding_fallbacks_total","Embedding calls that fell back to deterministic feature hashing")
 
 redis_client=None
 
@@ -101,7 +107,7 @@ def init_db():
             schema=[
               "CREATE EXTENSION IF NOT EXISTS vector",
               "CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, type TEXT NOT NULL, viewer_id TEXT, viewer TEXT, text TEXT, source TEXT, mode TEXT, at TEXT NOT NULL, payload TEXT NOT NULL)",
-              "CREATE TABLE IF NOT EXISTS lore (id TEXT PRIMARY KEY, kind TEXT NOT NULL, summary TEXT NOT NULL, status TEXT NOT NULL, subjects TEXT NOT NULL, evidence TEXT NOT NULL, importance DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL, mentions INTEGER NOT NULL DEFAULT 1, embedding vector(1536))",
+              f"CREATE TABLE IF NOT EXISTS lore (id TEXT PRIMARY KEY, kind TEXT NOT NULL, summary TEXT NOT NULL, status TEXT NOT NULL, subjects TEXT NOT NULL, evidence TEXT NOT NULL, importance DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL, mentions INTEGER NOT NULL DEFAULT 1, embedding vector({embedding_dimensions()}))",
               "CREATE TABLE IF NOT EXISTS utterances (id TEXT PRIMARY KEY, text TEXT NOT NULL, trigger TEXT NOT NULL, viewer TEXT, at TEXT NOT NULL)",
               "CREATE TABLE IF NOT EXISTS moments (id TEXT PRIMARY KEY, title TEXT NOT NULL, detail TEXT NOT NULL, score DOUBLE PRECISION NOT NULL, at TEXT NOT NULL)",
               "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -109,9 +115,22 @@ def init_db():
               "CREATE TABLE IF NOT EXISTS viewers (viewer_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, memory_enabled INTEGER NOT NULL DEFAULT 1)",
               "CREATE TABLE IF NOT EXISTS privacy_audit (id TEXT PRIMARY KEY, viewer_id TEXT NOT NULL, action TEXT NOT NULL, completed_at TEXT NOT NULL)",
               "CREATE TABLE IF NOT EXISTS overlay_commands (seq BIGSERIAL PRIMARY KEY, command_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at TEXT NOT NULL)",
+              "CREATE TABLE IF NOT EXISTS lore_enrichments (lore_id TEXT PRIMARY KEY, summary TEXT NOT NULL, relic_title TEXT NOT NULL, power_name TEXT NOT NULL, power_text TEXT NOT NULL, boss_name TEXT NOT NULL, boss_epithet TEXT NOT NULL, provider TEXT NOT NULL, updated_at TEXT NOT NULL)",
             ]
             for statement in schema: c.execute(statement)
+            vector_type=c.execute("SELECT format_type(atttypid,atttypmod) AS vector_type FROM pg_attribute WHERE attrelid='lore'::regclass AND attname='embedding' AND NOT attisdropped").fetchone()["vector_type"]
+            expected_type=f"vector({embedding_dimensions()})"
+            if vector_type!=expected_type:
+                c.execute(f"ALTER TABLE lore ALTER COLUMN embedding TYPE {expected_type} USING NULL::{expected_type}")
             c.execute("INSERT INTO settings VALUES('muted','false') ON CONFLICT(key) DO NOTHING")
+            from .story import init_schema as init_story_schema
+            init_story_schema(c)
+            from .relics import init_schema as init_relic_schema
+            init_relic_schema(c)
+            from .game import init_schema as init_game_schema
+            init_game_schema(c)
+            from .signal_game import init_schema as init_signal_schema
+            init_signal_schema(c)
             return
         c.executescript("""
         PRAGMA journal_mode=WAL;
@@ -124,8 +143,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS viewers (viewer_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, memory_enabled INTEGER NOT NULL DEFAULT 1);
         CREATE TABLE IF NOT EXISTS privacy_audit (id TEXT PRIMARY KEY, viewer_id TEXT NOT NULL, action TEXT NOT NULL, completed_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS overlay_commands (seq INTEGER PRIMARY KEY AUTOINCREMENT, command_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS lore_enrichments (lore_id TEXT PRIMARY KEY, summary TEXT NOT NULL, relic_title TEXT NOT NULL, power_name TEXT NOT NULL, power_text TEXT NOT NULL, boss_name TEXT NOT NULL, boss_epithet TEXT NOT NULL, provider TEXT NOT NULL, updated_at TEXT NOT NULL);
         """)
         c.execute("INSERT OR IGNORE INTO settings VALUES('muted','false')")
+        from .story import init_schema as init_story_schema
+        init_story_schema(c)
+        from .relics import init_schema as init_relic_schema
+        init_relic_schema(c)
+        from .game import init_schema as init_game_schema
+        init_game_schema(c)
+        from .signal_game import init_schema as init_signal_schema
+        init_signal_schema(c)
 
 def prune_raw_events():
     days=max(1,int(os.environ.get("LOREKEEPER_RAW_RETENTION_DAYS","7")))

@@ -12,7 +12,9 @@
     {"id": 2, "type": "timeseries", "title": "Event projection latency", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(lorekeeper_projection_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.50, sum(rate(lorekeeper_projection_seconds_bucket[5m])) by (le))", "legendFormat": "p50"}]},
     {"id": 3, "type": "stat", "title": "EventSub connected", "gridPos": {"x": 0, "y": 8, "w": 6, "h": 5}, "targets": [{"expr": "lorekeeper_eventsub_connected"}], "fieldConfig": {"defaults": {"min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}}}},
     {"id": 4, "type": "timeseries", "title": "Duplicate event deliveries", "gridPos": {"x": 6, "y": 8, "w": 9, "h": 5}, "targets": [{"expr": "sum(rate(lorekeeper_duplicate_events_total[5m]))", "legendFormat": "duplicates / sec"}]},
-    {"id": 5, "type": "timeseries", "title": "Projection errors", "gridPos": {"x": 15, "y": 8, "w": 9, "h": 5}, "targets": [{"expr": "sum(rate(lorekeeper_projection_errors_total[5m]))", "legendFormat": "errors / sec"}]}
+    {"id": 5, "type": "timeseries", "title": "Projection errors", "gridPos": {"x": 15, "y": 8, "w": 9, "h": 5}, "targets": [{"expr": "sum(rate(lorekeeper_projection_errors_total[5m]))", "legendFormat": "errors / sec"}]},
+    {"id": 6, "type": "timeseries", "title": "Event log consumer lag", "gridPos": {"x": 0, "y": 13, "w": 12, "h": 6}, "targets": [{"expr": "sum(lorekeeper_event_log_lag)", "legendFormat": "records behind"}]},
+    {"id": 7, "type": "stat", "title": "Dead-letter events", "gridPos": {"x": 12, "y": 13, "w": 12, "h": 6}, "targets": [{"expr": "sum(lorekeeper_dead_letter_events_total)", "legendFormat": "events"}]}
   ],
   "annotations": {"list": []},
   "editable": true,

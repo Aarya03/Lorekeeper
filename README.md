@@ -1,131 +1,105 @@
 # Lorekeeper
 
-Lorekeeper is a Twitch stream mascot with persistent, streamer-curated community memory. It connects to a real Twitch broadcaster account with OAuth, subscribes to Twitch EventSub over WebSocket, keeps an event and lore archive, and sends live mascot lines to an OBS browser source. Replay profiles remain available for rehearsals and offline judging.
+Lorekeeper is a Twitch community story game. Streamer-approved observations become research charms and fictional lore bosses. Chat votes between investigations, then plays a cooperative semantic signal hunt: viewers send `!guess WORD`, see meaning-based heat feedback, and try to find the hidden word together. A local embedding model grades guesses; LM Studio can create lore-linked words and clues, with curated fallbacks when narration is unavailable.
 
-## Service boundaries
+## The live story loop
 
-The implementation is organized as a modular service application with `server.py` as the composition root:
+1. A streamer approves a recurring community observation. LM Studio can paraphrase it and create a research charm, a lore-boss name, and an accessible ability. If generation fails, curated templates are used.
+2. The streamer opens a field study. Viewers vote with `!vote A` or `!vote B`: A deploys the charm and reveals hint one immediately; B preserves the sample and extends the hunt by 20 seconds while keeping hint one sealed initially.
+3. The lore boss opens a 90-second signal hunt. Chat guesses with `!guess WORD`. Local embeddings compare each guess to the hidden lore-linked target and show a shared heat score; the exact word solves the encounter. Guesses are rate limited per viewer, and the target stays private until the round resolves.
+4. The OBS overlay shows the lore boss, clue, timed hints, best heat, recent guesses, and countdown.
+5. At round end, participants earn persistent XP and titles. `!whatdoyouknow` reports a viewer's saved lore and game profile; `!forgetme` deletes both.
 
-- `lorekeeper/twitch.py` owns OAuth, encrypted token lifecycle, EventSub reconnects, and event normalization.
-- `lorekeeper/projection.py` owns idempotent event projection, lore extraction, mascot decisions, and rate limiting.
-- `lorekeeper/controls.py` owns replay and viewer privacy workflows.
-- `lorekeeper/http.py` owns the dashboard API, OAuth callback routes, OBS overlay delivery, and SSE fanout.
-- `lorekeeper/runtime.py` owns configuration, database adapters, metrics, and process-local fanout; `lorekeeper/event_bus.py` owns the Kafka-compatible log client.
+The default vote window is 45 seconds and the signal hunt is 90 seconds. Set `LOREKEEPER_CHAPTER_VOTE_SECONDS` to 15-180 seconds and `LOREKEEPER_SIGNAL_SECONDS` to 45-180 seconds. For semantic guessing, run an embedding model in LM Studio, set `EMBEDDING_PROVIDER=lm_studio`, set `EMBEDDING_MODEL` to its exact model ID, and set `EMBEDDING_DIMENSIONS=768` for the Nomic 768 model used in this setup. Guess scoring never falls back to feature hashing, because hashes do not represent meaning. Ordinary chat messages are not sent to a text-generation LLM; guesses go to the local embedding endpoint for scoring.
 
-The hackathon Compose deployment keeps these application services in one container for a low-friction local run; PostgreSQL, Redpanda, and Redis remain separate services. This code separation is the foundation for splitting the API, Twitch ingestor, and projection worker into independently scaled containers. They are not yet independently deployable because OAuth state and live connection status still use process-local state, and the overlay fanout currently assumes one API process.
+### Optional local LM Studio narrator
 
-## Connect a real Twitch channel
+In LM Studio, load an instruct model and start its OpenAI-compatible local server on port 1234. If Lorekeeper runs in Docker, enable LM Studio's **Serve on Local Network** option so the container can reach the host. Set these values in `.env` (the Docker service reaches LM Studio on the host through `host.docker.internal`):
 
-### 1. Create a Twitch developer application
-
-In the [Twitch Developer Console](https://dev.twitch.tv/console/apps), register an application and set its OAuth redirect URL to exactly:
-
-```text
-http://localhost:8787/auth/callback
+```dotenv
+LOREKEEPER_LLM_PROVIDER=lm_studio
+LOREKEEPER_LLM_BASE_URL=http://host.docker.internal:1234/v1
+LOREKEEPER_LLM_MODEL=
+LOREKEEPER_LLM_TIMEOUT_SECONDS=8
 ```
 
-Copy its Client ID and Client Secret. The browser callback is local; EventSub uses Twitch's outbound WebSocket transport, so you do not need a public webhook URL.
+Leave the model blank to use the model loaded in LM Studio. For Lorekeeper running directly on Windows instead of Docker, use `http://localhost:1234/v1`. If LM Studio is unavailable, times out, or returns invalid output, curated templates are used. Chat text is treated as untrusted data and the endpoint must be local.
 
-### 2. Configure and run Lorekeeper
+## Run with real Twitch
 
-Python 3.10+ is required. In PowerShell, from this project directory:
+### Twitch app setup
+
+In the [Twitch Developer Console](https://dev.twitch.tv/console/apps), create an application and set its redirect URL to the value in `TWITCH_REDIRECT_URI`. This project defaults to `http://localhost:8787/auth/callback`. If Twitch requires HTTPS for your app, use an HTTPS tunnel and set the same tunnel callback in both Twitch and `.env`. EventSub uses an outbound WebSocket connection, so no public webhook is needed.
+
+### Environment and services
+
+In PowerShell, from the repository directory:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`. Generate a Fernet key, then set `TOKEN_ENCRYPTION_KEY`:
+Set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` in `.env`. Generate a token-encryption key and set `TOKEN_ENCRYPTION_KEY`:
 
 ```powershell
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-For the event-log demo, start Redpanda and Lorekeeper together:
+For the live signal-hunt feature, load an embedding model in LM Studio and set `EMBEDDING_PROVIDER=lm_studio`, `EMBEDDING_MODEL` to the exact loaded model ID, and `EMBEDDING_DIMENSIONS=768`. Set `LOREKEEPER_LLM_PROVIDER=lm_studio` separately if you also want LM Studio to write the lore-linked target and clues; otherwise the game uses a lore-word fallback.
+
+Start the services with Docker Desktop:
 
 ```powershell
 docker compose up --build
 ```
 
-This starts Redpanda, PostgreSQL with pgvector, Redis, Prometheus, Grafana, and Lorekeeper. Events are acknowledged to a channel-keyed Redpanda topic with seven-day retention, then projected into PostgreSQL; Redis enforces the global speech token bucket and per-trigger cooldowns. Prometheus scrapes `/metrics`, and Grafana is provisioned with a Lorekeeper dashboard. Docker Desktop is required. For a simpler local fallback without Docker, `python server.py` uses SQLite and an in-process speech limiter.
+This starts Lorekeeper, PostgreSQL/pgvector, Redpanda, Redis, Prometheus, and Grafana. Lorekeeper is at `http://localhost:8787`; use `http://localhost:8787/overlay` as an OBS Browser Source. Grafana is at `http://localhost:3000` (`admin`, password from `GRAFANA_PASSWORD`, default `lorekeeper-demo`).
 
-Local dashboards: Lorekeeper `http://localhost:8787`, OBS overlay `http://localhost:8787/overlay`, Grafana `http://localhost:3000` (login `admin`; password is `GRAFANA_PASSWORD` or the local demo default `lorekeeper-demo`), and Prometheus `http://localhost:9090`. Keep these ports bound to localhost for a demo machine.
+Open the dashboard, choose **Connect Twitch**, and authorize the broadcaster account. Wait for **Live · EventSub** before starting a chapter. The connected channel name appears in the dashboard.
 
-Open [http://localhost:8787](http://localhost:8787) and choose **Connect Twitch**. Sign in as the broadcaster and grant the requested permissions. Once the dashboard says **Live · EventSub**, send a chat message in the connected channel. The event should appear in the timeline; lore cues can create a pending memory, and the mascot reaction appears in the dashboard and OBS overlay at [http://localhost:8787/overlay](http://localhost:8787/overlay).
+### Seed a useful community observation
 
-The app requests permissions for chat reading, follower events, subscriptions, channel point redemptions, and cheers. Twitch may enable only subscriptions whose scopes were granted; inspect server output for per-subscription status. Raid, stream online, and stream offline events are also subscribed.
+Lorekeeper only uses approved observations as story clues. In live channel chat, share a short, non-sensitive callback from a science stream, such as “Remember when chat spotted the loose cable during the experiment?” It will appear in **Community Observations**. Approve it before starting a field study. Streamer approval is deliberate: unreviewed messages never become the story seed.
 
-The dashboard reports the number of active EventSub subscriptions. If a permission was missed, click **Connect Twitch** to authorize again with the requested scopes. The local authorization callback must be `http://localhost:8787/auth/callback` in both `.env` and the Twitch Developer Console.
+### Start the audience chapter
 
-Twitch access and refresh tokens are encrypted in `data/twitch_tokens.bin` with `TOKEN_ENCRYPTION_KEY`. Keep `.env` and the encryption key private. Disconnecting Twitch revokes the active Twitch access token and removes the saved local authorization; if Twitch is unreachable, the local token is still removed and the dashboard reports the revocation warning. Raw event rows are pruned after seven days by default (`LOREKEEPER_RAW_RETENTION_DAYS`); Redpanda raw-topic retention is also seven days. `!forgetme` scrubs the viewer's relational event rows, derived lore, utterances, pending overlay commands, and limiter keys, and keeps only a suppression tombstone and audit record. The app binds to `127.0.0.1` by default.
+Keep the OBS overlay open. Start a field study and let chat choose with `!vote A` or `!vote B`. Reveal the finding, then choose **Start lore boss encounter**. On Twitch chat, viewers enter `!guess WORD`; the overlay shows the clue, timed hints, recent guesses, and the closest signal heat. Exact answer or timeout reveals the target. When it resolves, the dashboard shows researcher XP/titles and lets you start the next field study. **Preview with 200 simulated guessers** is clearly labelled synthetic activity; it does not create real Twitch votes.
 
-## Live demo flow
+For a detailed real-Twitch test and rehearsal sequence, see [docs/live_twitch_test_guide.md](docs/live_twitch_test_guide.md). For the timed demo narration, see [docs/demo_story.md](docs/demo_story.md).
 
-1. Open the dashboard and `/overlay` as an OBS Browser Source.
-2. Connect your Twitch broadcaster account.
-3. Send a real message in that channel, then use `!lore`, `!whatdoyouknow`, and `!forgetme` in chat to demonstrate community memory controls.
-4. Approve a pending lore candidate in the dashboard and use **Previously on…** to play the recap on the overlay.
-5. Trigger a real follow, subscription, raid, or channel point redemption if available; the mascot reacts to the EventSub notification. The panic switch mutes new lines immediately.
-6. Use replay only as an optional rehearsal or fallback. It is not the live integration.
+## Privacy and safety
 
-## Optional OpenAI reactions
+- Lore stays pending until the streamer approves it.
+- Vote/game records use Twitch user IDs for deduplication and credit. `!forgetme` removes the viewer's derived lore, relics, chapter text derived from that memory, action history, XP/profile, and vote records, then suppresses future learning and game actions for that account.
+- `!whatdoyouknow` reports the viewer's saved lore and game title/XP. A forgotten account receives an empty-memory response.
+- The dashboard panic mute immediately stops mascot speech.
+- Twitch tokens are encrypted at rest in `data/twitch_tokens.bin`. Keep `.env` and its key private.
+- Raw events are retained for seven days by default. Redpanda is append-only, so raw log records can remain until topic retention expires.
 
-Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env` to personalize eligible live mascot reactions with the OpenAI Responses API. Calls happen only after local trigger and rate-limit checks, have a 1.5-second timeout, set `store: false`, and fall back to templates when the request fails. Replay never makes model calls. Keep the API key out of browser code and source control.
+## Architecture and observability
 
-## Current implementation
+`server.py` composes the application. `lorekeeper/twitch.py` handles OAuth and EventSub, `lorekeeper/projection.py` projects live events/lore and sends `!guess` events into the durable `game.actions` topic, `lorekeeper/signal_game.py` grades semantic guesses and manages live encounters, `lorekeeper/narrator.py` provides local LM Studio story enrichment with template fallback, `lorekeeper/relics.py` manages stream-aware artifacts, and `lorekeeper/story.py` manages chapter votes. `lorekeeper/http.py` serves the dashboard/API and overlay. The Compose deployment runs these application modules with PostgreSQL, Redpanda, and Redis as separate services.
 
-- Local OAuth authorization-code flow with CSRF state validation and encrypted token persistence.
-- Twitch EventSub WebSocket ingestion for chat, follows, new subscriptions, resubscriptions, gift subscriptions, cheers, raids into the channel, channel point redemptions, and stream online/offline events.
-- WebSocket keepalive watchdog, Twitch `session_reconnect` handoff, bounded reconnect retry, notification deduplication, and a normalized event envelope.
-- Redpanda/Kafka-compatible event topic with channel-key ordering, acknowledged producer writes, consumer offset commits after projection, duplicate-safe processing, retry and DLQ handling, and seven-day retention.
-- PostgreSQL projections with a pgvector lore column, durable overlay-command outbox, SQLite fallback for the no-Docker path, and seven-day raw event retention.
-- Local lore candidate extraction with evidence IDs, streamer approval lifecycle, event moments, mascot templates and optional model phrasing.
-- OBS overlay over server-sent events, recap, speech limiting, panic mute, `!whatdoyouknow`, and deletion/redaction on `!forgetme`.
-- Synthetic replay profiles that use the same event-processing path without Twitch or model side effects.
-
-This is a single-channel hackathon implementation; it does not claim every production scale target in the design doc has been met. The pgvector column is provisioned, but lore embeddings and semantic reranking are not yet populated; the current extractor uses local salience heuristics. OpenAI personalizes eligible reactions, but does not extract lore. Distributed multi-channel workers, load-tested 10K events/second capacity, and further safety and failure-mode hardening remain. See [Lorekeeper_System_Design.md](Lorekeeper_System_Design.md) for the remaining target architecture.
+Check readiness at `http://localhost:8787/api/ready` and metrics at `http://localhost:8787/metrics`. The dashboard's **Rehearsal & safety** panel includes a raid replay, a prompt-injection profile, and a 1,000-event load run; all are explicitly synthetic and cannot create lore. For a sustained load report, run `python tools/load_test.py --duration 60 --rate 10000`; report measured results, not the requested target. Synthetic replay/load traffic is for engineering rehearsal and is not a substitute for the real Twitch demo.
 
 ## Routes
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/auth/connect` | Start Twitch OAuth |
-| GET | `/auth/callback` | Validate and store authorization, then start EventSub |
-| POST | `/api/twitch/disconnect` | Stop EventSub, revoke the Twitch token, and remove saved authorization |
-| GET | `/api/state` | Dashboard projection and Twitch connection/subscription status |
-| GET | `/api/stream` | Live server-sent event fanout to dashboard and overlay |
-| GET | `/api/health` | Liveness |
+| GET | `/auth/callback` | Validate authorization and start EventSub |
+| GET | `/api/state` | Dashboard, lore, relic vault, chapter, and Twitch status |
+| GET | `/api/stream` | Live server-sent events for dashboard and overlay |
+| POST | `/api/chapter/start` | Start a chapter from approved lore |
+| POST | `/api/chapter/close` | Close the active vote and reveal the result |
+| POST | `/api/game/start` | Start the resolved chapter's live Twitch boss encounter |
+| POST | `/api/game/replay` | Preview a separate simulated 200-viewer encounter |
+| POST | `/api/lore/action` | Approve, reject, restore, retire, or delete a memory |
+| POST | `/api/settings/mute` | Set panic mute |
+| POST | `/api/privacy/forget` | Delete a viewer's derived memory |
 | GET | `/api/ready` | Database, event log, and Redis readiness |
 | GET | `/metrics` | Prometheus metrics |
-| POST | `/api/replay` | Start a synthetic rehearsal profile |
-| POST | `/api/lore/action` | Approve, reject, retire, or delete lore |
-| POST | `/api/settings/mute` | Set the mascot panic mute |
-| POST | `/api/privacy/forget` | Delete a viewer's derived memory |
-| POST | `/api/recap` | Compose a recap from approved lore and moments |
-
-The Twitch EventSub WebSocket session uses the `session_welcome` ID to create subscriptions, follows Twitch's reconnect URL without dropping the old socket before handoff, and deduplicates redelivered notification IDs. Twitch requires a user access token for WebSocket subscriptions; scopes are subscription-specific. See [Twitch EventSub WebSocket messages](https://dev.twitch.tv/docs/eventsub/websocket-reference/), [subscription types and scopes](https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types), and [OAuth authorization-code flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/).
 
 ## Hackathon submission
 
-The [Codex × TwitchCon Hackathon](https://twitchcon-codex.devpost.com/) asks for a Twitch-connected project, source and run instructions, a public YouTube demo up to three minutes, a project description, and the Codex session ID. This repository provides the local source and real Twitch connection flow; the team still needs to record and submit the demo video and project description.
-
-
-### Codex Session Details
-
-```text
->_ OpenAI Codex (v0.164.0)
-
-Model:              GPT-6-Luna (reasoning medium, summaries auto)
-Model Provider:     OpenAI
-Directory:          ~\OneDrive\Desktop\Lorekeeper
-Permissions:        Workspace (granular)
-Agents.md:          <none>
-Account:            aaryavartjoshi@gmail.com (Go)
-Collaboration Mode: Default
-Session ID:         01a17e90-6f6b-7640-b71f-e99fa3e451b9
-
-Monthly Limit:      [████████████████████] 100% left (resets 23:42 on 26 Nov)
-Usage Reset:        1 reset available (run /usage)
-```
+The [Codex x TwitchCon Hackathon](https://twitchcon-codex.devpost.com/) asks for the project repository, a public YouTube demo up to three minutes, a project description, and the Codex session ID. The demo should show this chapter loop working on a real Twitch channel and include how Codex was used to build it.

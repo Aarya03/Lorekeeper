@@ -1,5 +1,146 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lorekeeper Overlay</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:#edf0e5;font-family:'DM Sans',Arial,sans-serif}.keeper{position:absolute;left:4vw;bottom:7vh;width:min(360px,75vw);display:flex;align-items:flex-end;gap:12px;opacity:.97;transition:opacity .4s}.character{position:relative;flex:0 0 94px;height:112px;filter:drop-shadow(0 8px 13px #0008);animation:bob 4s ease-in-out infinite}.ear{position:absolute;top:1px;width:27px;height:49px;border:1px solid #d5e9b2;border-radius:70% 70% 12% 12%;background:#a9c783}.ear.left{left:11px;transform:rotate(-21deg)}.ear.right{right:11px;transform:rotate(21deg)}.face{position:absolute;z-index:1;top:17px;left:2px;width:90px;height:79px;border:1px solid #e1efc15c;border-radius:48%;background:radial-gradient(ellipse at 40% 25%,#e6efcf,#bed796 58%,#849d64);box-shadow:inset 0 -8px 15px #596e423d}.eye{position:absolute;top:38px;width:6px;height:9px;border-radius:50%;background:#263328}.eye.one{left:25px}.eye.two{right:25px}.cheek{position:absolute;top:52px;width:13px;height:6px;border-radius:50%;background:#d68d80a6}.cheek.one{left:11px}.cheek.two{right:11px}.mouth{position:absolute;top:52px;left:42px;width:7px;height:6px;border-bottom:1.5px solid #45543a;border-radius:0 0 9px 9px}.scarf{position:absolute;z-index:2;top:88px;left:10px;width:73px;height:11px;border-radius:50%;background:#d08364}.scarf:after{content:'';position:absolute;right:12px;top:5px;width:13px;height:18px;background:#d08364;clip-path:polygon(0 0,100% 0,80% 100%)}.bubble{position:relative;max-width:245px;margin-bottom:18px;padding:11px 14px;border:1px solid #c8e3a155;border-radius:10px;background:#111811eF;box-shadow:0 5px 20px #0005;color:#f1f3e8;font-size:14px;line-height:1.45;opacity:0;transform:translateY(7px);transition:.25s}.bubble.show{opacity:1;transform:translateY(0)}.bubble:after{content:'';position:absolute;left:-6px;bottom:15px;width:10px;height:10px;transform:rotate(45deg);background:#111811;border-left:1px solid #c8e3a155;border-bottom:1px solid #c8e3a155}.brand{position:absolute;right:16px;bottom:13px;color:#d8e8c1a8;font:10px 'DM Mono',monospace;letter-spacing:1.5px;text-shadow:0 2px 5px #000}.keeper.hidden{opacity:0}.keeper.hidden .bubble{opacity:0}@keyframes bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}.keeper.celebrate .character{animation:celebrate .45s ease-in-out 4}@keyframes celebrate{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg) translateY(-8px)}75%{transform:rotate(9deg) translateY(-8px)}}
-</style></head><body><div class="keeper hidden" id="keeper"><div class="character"><div class="ear left"></div><div class="ear right"></div><div class="face"><i class="eye one"></i><i class="eye two"></i><i class="cheek one"></i><i class="cheek two"></i><i class="mouth"></i></div><div class="scarf"></div></div><div class="bubble" id="bubble"></div></div><div class="brand">✳ &nbsp; LOREKEEPER</div><script>
-const keeper=document.querySelector('#keeper'),bubble=document.querySelector('#bubble');let timer,muted=false;let lastSeq=Number(sessionStorage.getItem('lorekeeper-overlay-seq')||0);fetch('/api/state').then(r=>r.json()).then(s=>{muted=!!s.muted;if(muted)keeper.classList.add('hidden')}).catch(()=>{});const source=new EventSource('/api/stream?since='+lastSeq);source.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(data.kind==='settings'){muted=!!data.muted;if(muted){clearTimeout(timer);bubble.classList.remove('show');keeper.classList.add('hidden')}return}if(data.kind!=='reaction'||!data.reaction||muted)return;const seq=Number(data.seq||data.reaction.seq||0);if(seq&&seq<=lastSeq)return;if(seq){lastSeq=seq;sessionStorage.setItem('lorekeeper-overlay-seq',String(seq))}const r=data.reaction;bubble.textContent=r.text;keeper.classList.remove('hidden','celebrate');if(r.animation==='celebrate')keeper.classList.add('celebrate');requestAnimationFrame(()=>bubble.classList.add('show'));clearTimeout(timer);timer=setTimeout(()=>{bubble.classList.remove('show');setTimeout(()=>keeper.classList.add('hidden'),300)},7500)};
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lorekeeper - live story overlay</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:#edf0e5;font-family:'DM Sans',Arial,sans-serif}
+.story-card{position:absolute;left:4vw;top:4vh;width:min(490px,44vw);padding:20px 22px 17px;border:1px solid #bfd89b70;border-radius:13px;background:linear-gradient(145deg,#101811ec,#101510de);box-shadow:0 12px 34px #0007;backdrop-filter:blur(8px);color:#edf0e5;transition:opacity .35s,transform .35s}.story-card.path-a{border-color:#b8df8c;background:linear-gradient(145deg,#17221aef,#101510e8)}.story-card.path-b{border-color:#c4a9e5;background:linear-gradient(145deg,#211b28ef,#101510e8)}
+.story-card.hidden{display:none}.eyebrow{font:10px 'DM Mono',monospace;letter-spacing:1.4px;color:#c2e2a0;display:flex;justify-content:space-between}.chapter-title{font:700 clamp(19px,2vw,27px)/1.16 'Manrope','DM Sans',sans-serif;letter-spacing:-.6px;margin:10px 0 8px}.chapter-intro{font-size:12px;line-height:1.5;color:#b9c4b3;margin:0 0 12px}.clue{padding:9px 11px;border:1px solid #87997550;background:#c8e5a00e;border-radius:7px}.clue-label{font:8px 'DM Mono',monospace;letter-spacing:1px;color:#a9c88d}.clue-text{font-size:11px;line-height:1.45;color:#e5ecdf;margin-top:5px}.vote-option{margin-top:10px}.vote-line{display:flex;align-items:center;gap:8px;font-size:10px}.vote-key{width:20px;height:20px;border-radius:5px;background:#32432a;color:#e1f0cc;display:grid;place-items:center;font:600 10px 'DM Mono',monospace}.vote-name{flex:1;color:#e6ebdf;font-weight:600}.vote-count{font:9px 'DM Mono',monospace;color:#b5d297}.track{height:4px;background:#30382e;border-radius:6px;margin:5px 0 0 28px;overflow:hidden}.track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#8db86a,#c7e9a2);border-radius:6px;transition:width .4s}.result{border-top:1px solid #74836355;margin-top:12px;padding-top:10px;font-size:11px;line-height:1.45;color:#dcebd0}.vote-hint{font:8px 'DM Mono',monospace;color:#9ba994;margin-top:10px}.keeper{position:absolute;left:4vw;bottom:7vh;width:min(380px,70vw);display:flex;align-items:flex-end;gap:12px;opacity:.97;transition:opacity .35s}.keeper.hidden{opacity:0;pointer-events:none}.character{position:relative;flex:0 0 94px;height:112px;filter:drop-shadow(0 8px 13px #0008);animation:bob 4s ease-in-out infinite}.ear{position:absolute;top:1px;width:27px;height:49px;border:1px solid #d5e9b2;border-radius:70% 70% 12% 12%;background:#a9c783}.ear.left{left:11px;transform:rotate(-21deg)}.ear.right{right:11px;transform:rotate(21deg)}.face{position:absolute;z-index:1;top:17px;left:2px;width:90px;height:79px;border:1px solid #e1efc15c;border-radius:48%;background:radial-gradient(ellipse at 40% 25%,#e6efcf,#bed796 58%,#849d64);box-shadow:inset 0 -8px 15px #596e423d}.eye{position:absolute;top:38px;width:6px;height:9px;border-radius:50%;background:#263328}.eye.one{left:25px}.eye.two{right:25px}.cheek{position:absolute;top:52px;width:13px;height:6px;border-radius:50%;background:#d68d80a6}.cheek.one{left:11px}.cheek.two{right:11px}.mouth{position:absolute;top:52px;left:42px;width:7px;height:6px;border-bottom:1.5px solid #45543a;border-radius:0 0 9px 9px}.scarf{position:absolute;z-index:2;top:88px;left:10px;width:73px;height:11px;border-radius:50%;background:#d08364}.scarf:after{content:'';position:absolute;right:12px;top:5px;width:13px;height:18px;background:#d08364;clip-path:polygon(0 0,100% 0,80% 100%)}.bubble{position:relative;max-width:265px;margin-bottom:18px;padding:11px 14px;border:1px solid #c8e3a155;border-radius:10px;background:#111811ef;box-shadow:0 5px 20px #0005;color:#f1f3e8;font-size:13px;line-height:1.45;opacity:0;transform:translateY(7px);transition:.25s}.bubble.show{opacity:1;transform:translateY(0)}.bubble:after{content:'';position:absolute;left:-6px;bottom:15px;width:10px;height:10px;transform:rotate(45deg);background:#111811;border-left:1px solid #c8e3a155;border-bottom:1px solid #c8e3a155}.brand{position:absolute;right:16px;bottom:13px;color:#d8e8c1a8;font:10px 'DM Mono',monospace;letter-spacing:1.5px;text-shadow:0 2px 5px #000}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}.keeper.celebrate .character{animation:celebrate .45s ease-in-out 4}@keyframes celebrate{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg) translateY(-8px)}75%{transform:rotate(9deg) translateY(-8px)}}
+@media(max-width:700px){.story-card{left:3vw;top:3vh;width:70vw;padding:14px}.chapter-title{font-size:19px}.keeper{left:3vw;bottom:4vh}.brand{right:10px;bottom:8px}}
+.vote-name{min-width:0;line-height:1.35}.vote-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.vote-copy .vote-name{flex:0 0 auto}.vote-detail{font-size:9px;line-height:1.35;color:#b9c4b3}
+</style>
+<style>
+.active-relic{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center;margin-top:10px;padding:8px 10px;border:1px solid #a98cff66;border-radius:9px;background:linear-gradient(110deg,#302741b8,#22253ab8)}.active-relic.hidden{display:none}.active-relic-art{width:56px;height:56px;display:grid;place-items:center;border-radius:8px;background:radial-gradient(circle,#694e8055,transparent 70%)}.active-relic-art svg{width:55px;height:55px;filter:drop-shadow(0 0 8px #bd9aff88);animation:relic-float 3s ease-in-out infinite}.active-relic-copy{min-width:0}.active-relic-top{display:flex;justify-content:space-between;gap:5px;color:#d8caff;font:8px 'DM Mono',monospace;letter-spacing:.6px;text-transform:uppercase}.active-relic-copy strong{display:block;margin-top:3px;color:#fff5ff;font:600 12px 'Manrope',sans-serif}.active-relic-copy p{margin:3px 0;color:#c5bfd2;font-size:9px;line-height:1.3}.active-relic-meter{height:3px;background:#484359;border-radius:5px;overflow:hidden;margin-top:5px}.active-relic-meter i{display:block;height:100%;background:linear-gradient(90deg,#a98cff,#f19ac0);transition:width .5s}.active-relic-meta{display:flex;justify-content:space-between;margin-top:3px;color:#a9a2b8;font:7px 'DM Mono',monospace}
+.boss-card{position:absolute;left:4vw;top:4vh;width:min(490px,44vw);padding:20px 22px;border:1px solid #ff977dcc;border-radius:14px;background:linear-gradient(145deg,#25151aef,#101510ed);box-shadow:0 14px 42px #0009;color:#fff}.boss-card.hidden{display:none}.boss-kicker{font:10px 'DM Mono',monospace;letter-spacing:1.5px;color:#ffc18c;display:flex;justify-content:space-between}.boss-card h1{font:700 clamp(24px,2.7vw,38px)/1.08 'Manrope',Arial,sans-serif;margin:10px 0 4px}.boss-card p{margin:0;color:#d5c5c2;font-size:13px}.boss-health{height:18px;margin:18px 0 8px;background:#423237;border-radius:20px;overflow:hidden;border:1px solid #f1b89c55}.boss-health i{display:block;width:100%;height:100%;background:linear-gradient(90deg,#f0646d,#ffbd76);transition:width .3s}.boss-meter{display:flex;justify-content:space-between;font:10px 'DM Mono',monospace;color:#ffe3ce}.boss-feed{margin-top:14px;display:flex;flex-direction:column;gap:5px;font-size:11px;color:#f3ded8}.boss-feed span{padding:5px 8px;background:#ffffff0c;border-radius:5px}.boss-commands{margin-top:12px;font:10px 'DM Mono',monospace;color:#ffc18c}.boss-clue{margin:14px 0 4px;padding:12px 14px;border:1px solid #ffc18c44;border-radius:10px;background:#ffc18c0d;color:#fff4e9;font-size:15px;line-height:1.45}.boss-card.surge{animation:surge .55s ease-in-out infinite alternate}@keyframes surge{to{box-shadow:0 0 36px #ff675b88;border-color:#ffcc87}}
+@keyframes relic-float{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
+</style></head>
+<body>
+<section class="story-card hidden" id="story-card" aria-live="polite">
+  <div class="eyebrow"><span id="chapter-kicker">THE COMMUNITY FIELD STUDY</span><span id="chapter-clock"></span></div>
+  <h1 class="chapter-title" id="chapter-title">A new investigation begins</h1>
+  <p class="chapter-intro" id="chapter-intro"></p>
+  <div class="clue"><div class="clue-label">A COMMUNITY OBSERVATION</div><div class="clue-text" id="chapter-seed"></div></div>
+  <div class="active-relic hidden" id="active-relic"><div class="active-relic-art" id="active-relic-art"></div><div class="active-relic-copy"><div class="active-relic-top"><span id="active-relic-type"></span><span id="active-relic-tier"></span></div><strong id="active-relic-name"></strong><p id="active-relic-power"></p><div class="active-relic-meter"><i id="active-relic-progress"></i></div><div class="active-relic-meta"><span id="active-relic-resonance"></span><span id="active-relic-charges"></span></div></div></div>
+  <div class="vote-option"><div class="vote-line"><span class="vote-key">A</span><div class="vote-copy"><strong class="vote-name" id="choice-a"></strong><small class="vote-detail" id="choice-a-detail"></small></div><span class="vote-count" id="votes-a"></span></div><div class="track"><i id="bar-a"></i></div></div>
+  <div class="vote-option"><div class="vote-line"><span class="vote-key">B</span><div class="vote-copy"><strong class="vote-name" id="choice-b"></strong><small class="vote-detail" id="choice-b-detail"></small></div><span class="vote-count" id="votes-b"></span></div><div class="track"><i id="bar-b"></i></div></div>
+  <div class="result hidden" id="chapter-result"></div>
+  <div class="vote-hint" id="vote-hint">VOTE IN TWITCH CHAT: !VOTE A OR !VOTE B</div>
+</section>
+<section id="boss-card" class="boss-card hidden" aria-live="polite"><div class="boss-kicker"><span id="boss-round-label">LIVE LORE SIGNAL HUNT</span><span id="boss-round-clock"></span></div><h1 id="boss-round-name"></h1><p id="boss-round-epithet"></p><div class="boss-clue"><b>FIELD CLUE</b><div id="boss-round-clue"></div><div id="boss-round-hint" style="margin-top:7px;color:#ffc18c"></div></div><div class="boss-health"><i id="boss-round-hp"></i></div><div class="boss-meter"><span id="boss-round-hp-label"></span><span id="boss-round-meters"></span></div><div class="boss-feed" id="boss-round-feed"></div><div class="boss-commands">CHAT: !GUESS WORD · HEAT RISES AS MEANING GETS CLOSER</div></section>
+<div class="keeper hidden" id="keeper"><div class="character"><div class="ear left"></div><div class="ear right"></div><div class="face"><i class="eye one"></i><i class="eye two"></i><i class="cheek one"></i><i class="cheek two"></i><i class="mouth"></i></div><div class="scarf"></div></div><div class="bubble" id="bubble"></div></div>
+<div class="brand">✳ &nbsp; LOREKEEPER · CHAT TAKES ON THE NEXT LORE BOSS</div>
+<script>
+const keeper=document.querySelector('#keeper'),bubble=document.querySelector('#bubble'),card=document.querySelector('#story-card');
+let speechTimer,muted=false,currentChapter=null,lastSeq=Number(sessionStorage.getItem('lorekeeper-overlay-seq')||0);
+const bossCard=document.querySelector('#boss-card');
+let lastGameStatus='',lastGameId='',gameResolvedAt=0;
+function showGame(game){
+  const active=game&&game.status==='ACTIVE';
+  if(game&&game.id!==lastGameId){lastGameId=game.id;lastGameStatus=''}
+  if(game&&game.status==='RESOLVED'&&lastGameStatus==='ACTIVE')gameResolvedAt=Date.now();
+  if(game)lastGameStatus=game.status;
+  const reveal=game&&game.status==='RESOLVED'&&gameResolvedAt&&Date.now()-gameResolvedAt<12000;
+  const show=active||reveal;
+  bossCard.classList.toggle('hidden',!show);
+  if(show){
+    card.classList.add('hidden');
+    document.querySelector('#boss-round-label').textContent=game.mode==='simulation'?'SIMULATED SIGNAL HUNT':'LIVE TWITCH · LORE SIGNAL HUNT';
+    document.querySelector('#boss-round-clock').textContent=active?'0:'+String(game.seconds_left).padStart(2,'0'):game.solved?'SIGNAL FOUND':'TIME';
+    document.querySelector('#boss-round-name').textContent=game.boss_name;
+    document.querySelector('#boss-round-epithet').textContent=active?game.boss_epithet+' · Relic: '+game.relic_name:game.result;
+    document.querySelector('#boss-round-clue').textContent=game.clue||'';
+    document.querySelector('#boss-round-hint').textContent=game.target_word?'ANSWER: '+game.target_word.toUpperCase():game.hint?`HINT ${game.hint_stage}: ${game.hint}`:'A hint will unlock as chat explores.';
+    document.querySelector('#boss-round-hp').style.width=Math.max(0,game.hp*100/game.max_hp)+'%';
+    document.querySelector('#boss-round-hp-label').textContent='DISTANCE '+game.hp+' / 100';
+    document.querySelector('#boss-round-meters').textContent=game.best_guess?'BEST HEAT '+game.best_band+' · '+game.best_heat+'%':'SIGNAL NOT FOUND';
+    document.querySelector('#boss-round-feed').replaceChildren(...(game.feed||[]).slice(0,4).map(action=>{const node=document.createElement('span');node.textContent=action.viewer+' guessed '+action.guess+' · '+action.heat+'% heat';return node}));
+    bossCard.classList.toggle('surge',game.seconds_left<=10);
+  }else if(currentChapter) card.classList.remove('hidden');
+}
+const relicShapes={reliquary:'M50 7 83 25v34c0 17-13 28-33 35C30 87 17 76 17 59V25z',medallion:'M50 12a32 32 0 1 0 0 64 32 32 0 0 0 0-64M39 73l-5 15 16-8 16 8-5-15',crystal:'M50 7 82 29 69 75 50 92 31 75 18 29z',compass:'M50 12a32 32 0 1 0 0 64 32 32 0 0 0 0-64M58 37 68 27 63 43 42 57 32 67 37 51z',keepsake:'M23 18h54a7 7 0 0 1 7 7v43a7 7 0 0 1-7 7H23a7 7 0 0 1-7-7V25a7 7 0 0 1 7-7'};
+const relicGlyphs={crystal:'M50 23 69 42 50 62 31 42z M50 23v39 M31 42h38',die:'M35 32h30a5 5 0 0 1 5 5v26a5 5 0 0 1-5 5H35a5 5 0 0 1-5-5V37a5 5 0 0 1 5-5z M40 42h1 M59 57h1 M59 42h1 M40 57h1',palette:'M50 27c-15 0-26 10-26 24 0 13 10 23 22 23h7c5 0 8-5 5-9l-3-4c-2-3 0-7 4-7h8c7 0 9-8 5-14-5-8-13-13-22-13z',soundwave:'M26 51h7l6-16 11 33 9-25 6 8h9',circuit:'M32 32h17v17H32z M49 40h18v18H49z M40 49v17h-8 M67 49h8v-9',flame:'M50 25c4 12-7 15-5 24 2 5 8 5 9 0 8 9 8 18 2 24-10 11-29 4-29-11 0-10 6-18 13-25-1 9 2 12 6 12 6 0 8-10 4-24z',medal:'M50 32a18 18 0 1 0 0 36 18 18 0 0 0 0-36z M39 65 34 82l16-8 16 8-5-17',orbit:'M50 50m-9 0a9 9 0 1 0 18 0 9 9 0 1 0-18 0 M50 50c-20-25-35-14-24 0 10 13 37 18 48 5 10-13-6-31-22-31-15 0-27 13-26 26',compass:'M50 27 61 50 50 73 39 50z M50 27v46 M27 50h46',eye:'M23 50Q50 24 77 50 50 76 23 50z M50 42a8 8 0 1 0 0 16 8 8 0 0 0 0-16z',lantern:'M37 35h26l5 34H32z M42 27h16v8H42z M39 76h22 M50 35v34',cassette:'M29 35h42v31H29z M36 43h28v10H36z M40 60a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M60 60a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',gear:'M50 29v8m0 26v8m21-21h-8m-26 0h-8m36-15-6 6m-18 18-6 6m30 0-6-6M41 41l-6-6 M50 41a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',star:'m50 25 7 17 18 1-14 12 5 18-16-10-16 10 5-18-14-12 18-1z'};
+const scienceRelicGlyphs={microscope:'M39 27h19v8H39z M44 35v20l-9 10h30 M52 39l14 14-7 7-14-14z M33 73h39 M65 60a16 16 0 0 0 10-12',atom:'M50 50c-23-10-29-24-19-29 11-6 28 11 32 29 5 19-2 32-13 29-12-4-17-25 0-42 13-13 29-14 31-3 2 12-18 24-31 16z M50 50h1',flask:'M41 25h18 M46 25v20L31 70h38L54 45V25 M39 61h22',molecule:'M35 35l16 15 17-17 M51 50l-7 19 M35 35a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M61 26a7 7 0 1 0 14 0 7 7 0 0 0-14 0z M37 63a7 7 0 1 0 14 0 7 7 0 0 0-14 0z M44 43a7 7 0 1 0 14 0 7 7 0 0 0-14 0z',telescope:'M28 36l40-12 8 19-40 12z M40 52l10 25 M65 43l7 17 M32 60h38'};
+const relicPattern={orbit:'<ellipse cx="50" cy="50" rx="39" ry="16" fill="none" stroke="#fff" stroke-opacity=".3" transform="rotate(-28 50 50)"/>',stardust:'<circle cx="28" cy="28" r="2" fill="#fff"/><circle cx="72" cy="34" r="1.5" fill="#fff"/><circle cx="32" cy="68" r="1.5" fill="#fff"/><circle cx="72" cy="70" r="2" fill="#fff"/>',engraving:'<path d="M27 50h6m34 0h6M50 27v6m0 34v6M34 34l5 5m22 22 5 5m0-32-5 5m-22 22-5 5" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>',runes:'<path d="m23 35 6-5 6 5-6 5zm36 0 6-5 6 5-6 5zM23 65l6-5 6 5-6 5zm36 0 6-5 6 5-6 5z" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"/>',ribbons:'<path d="M25 32q25-16 50 0M25 68q25 16 50 0" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>'};
+function showRelic(relic){
+  const box=document.querySelector('#active-relic');
+  if(!relic){box.classList.add('hidden');return}
+  box.classList.remove('hidden');
+  document.querySelector('#active-relic-type').textContent=relic.stream_label;
+  document.querySelector('#active-relic-tier').textContent=relic.stage_name;
+  document.querySelector('#active-relic-name').textContent=relic.name;
+  document.querySelector('#active-relic-power').textContent=relic.power_name+' · '+relic.power_text;
+  document.querySelector('#active-relic-resonance').textContent=relic.resonance+' RESONANCE';
+  document.querySelector('#active-relic-charges').textContent=relic.charge+'/'+relic.max_charge+' CHARGES · '+relic.wards+' WARDS';
+  const thresholds=[0,30,100,250,600],stage=Number(relic.stage)||0,next=relic.next_stage_at;
+  const pct=next?Math.max(0,Math.min(100,(relic.resonance-thresholds[stage])*100/(next-thresholds[stage]))):100;
+  document.querySelector('#active-relic-progress').style.width=pct+'%';
+  const color=s=>/^#[\da-f]{6}$/i.test(s||'')?s:'#a98cff',colors=relic.palette||[],c1=color(colors[0]),c2=color(colors[1]);
+  const scienceGlyphMap={microscope:'gear',atom:'orbit',flask:'lantern',molecule:'orbit',telescope:'compass'};
+  const sigil=relic.visual?.sigil,glyph=scienceRelicGlyphs[sigil]||relicGlyphs[scienceGlyphMap[sigil]||sigil]||relicGlyphs.star;
+  const shape=relicShapes[relic.visual?.shape]||relicShapes.reliquary,pattern=relicPattern[relic.visual?.pattern]||relicPattern.stardust;
+  document.querySelector('#active-relic-art').innerHTML=`<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="overlay-relic-grad"><stop stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><path d="${shape}" fill="url(#overlay-relic-grad)" fill-opacity=".28" stroke="url(#overlay-relic-grad)" stroke-width="3" stroke-linejoin="round"/>${pattern}<path d="${glyph}" fill="none" stroke="#fff7ff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="20" r="2" fill="${c2}"/><circle cx="83" cy="78" r="2" fill="${c1}"/></svg>`;
+}
+function showChapter(chapter){
+  const reveal=chapter&&currentChapter&&currentChapter.id===chapter.id&&currentChapter.status==='VOTING'&&chapter.status==='RESOLVED';
+  currentChapter=chapter;
+  if(!chapter){card.classList.add('hidden');card.classList.remove('path-a','path-b');return}
+  card.classList.remove('hidden');
+  document.querySelector('#chapter-kicker').textContent='FIELD STUDY '+chapter.ordinal+' · '+(chapter.status==='VOTING'?'CHAT DECIDES':'THE FINDING IS RECORDED');
+  document.querySelector('#chapter-title').textContent=chapter.title||'A new investigation begins';
+  document.querySelector('#chapter-intro').textContent=chapter.intro;
+  document.querySelector('#chapter-seed').textContent=chapter.seed_lore;
+  showRelic(chapter.relic);
+  document.querySelector('#choice-a').textContent=chapter.choices.A;
+  document.querySelector('#choice-b').textContent=chapter.choices.B;
+  document.querySelector('#choice-a-detail').textContent=chapter.choice_details?.A||'';
+  document.querySelector('#choice-b-detail').textContent=chapter.choice_details?.B||'';
+  const a=Number(chapter.votes.A||0),b=Number(chapter.votes.B||0),total=a+b;
+  document.querySelector('#votes-a').textContent=a+' vote'+(a===1?'':'s');
+  document.querySelector('#votes-b').textContent=b+' vote'+(b===1?'':'s');
+  document.querySelector('#bar-a').style.width=(total?Math.round(a*100/total):0)+'%';
+  document.querySelector('#bar-b').style.width=(total?Math.round(b*100/total):0)+'%';
+  const result=document.querySelector('#chapter-result'),hint=document.querySelector('#vote-hint');
+  if(chapter.status==='VOTING'){
+    card.classList.remove('path-a','path-b');
+    result.classList.add('hidden');hint.textContent='VOTE IN TWITCH CHAT: !VOTE A OR !VOTE B';
+    const remaining=Math.max(0,Math.ceil((new Date(chapter.closes_at)-Date.now())/1000));
+    document.querySelector('#chapter-clock').textContent=Math.floor(remaining/60)+':'+String(remaining%60).padStart(2,'0')+' LEFT';
+  }else{
+    card.classList.toggle('path-a',chapter.winning_choice==='A');
+    card.classList.toggle('path-b',chapter.winning_choice==='B');
+    result.classList.remove('hidden');result.textContent=chapter.result;
+    hint.textContent='THE CHAT CHOSE '+(chapter.winning_choice==='TIE'?'BOTH PATHS':'PATH '+chapter.winning_choice)+' · '+total+' VOTES';
+    document.querySelector('#chapter-clock').textContent='REVEALED';
+    if(reveal)showReaction({text:chapter.result,animation:'celebrate'});
+  }
+}
+function showReaction(reaction){
+  if(muted||!reaction)return;
+  const seq=Number(reaction.seq||0);
+  if(seq&&seq<=lastSeq)return;
+  if(seq){lastSeq=seq;sessionStorage.setItem('lorekeeper-overlay-seq',String(seq))}
+  bubble.textContent=reaction.text;
+  keeper.classList.remove('hidden','celebrate');
+  if(reaction.animation==='celebrate')keeper.classList.add('celebrate');
+  requestAnimationFrame(()=>bubble.classList.add('show'));
+  clearTimeout(speechTimer);
+  speechTimer=setTimeout(()=>{bubble.classList.remove('show');setTimeout(()=>keeper.classList.add('hidden'),300)},7500);
+}
+fetch('/api/state',{cache:'no-store'}).then(response=>response.json()).then(state=>{muted=!!state.muted;showChapter(state.chapter);showGame(state.game)}).catch(()=>{});
+const source=new EventSource('/api/stream?since='+lastSeq);
+source.onmessage=event=>{
+  let data;try{data=JSON.parse(event.data)}catch{return}
+  if(data.kind==='settings'){
+    muted=!!data.muted;
+    if(muted){clearTimeout(speechTimer);bubble.classList.remove('show');keeper.classList.add('hidden')}
+    return;
+  }
+  if(data.kind==='chapter'){showChapter(data.chapter);return}
+  if(data.kind==='game'){showGame(data.game);return}
+  if(data.kind==='reaction'&&data.reaction&&!muted)showReaction(data.reaction);
+};
+setInterval(()=>{if(currentChapter&&currentChapter.status==='VOTING')showChapter(currentChapter);fetch('/api/state',{cache:'no-store'}).then(response=>response.json()).then(state=>showGame(state.game)).catch(()=>{})},2000);
+</script>
+</body></html>

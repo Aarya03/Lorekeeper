@@ -90,6 +90,7 @@ def start_twitch_worker():
 def subscribe_eventsub(access,session_id,broadcaster_id,scopes):
     definitions=[
       ("channel.chat.message","1",{"broadcaster_user_id":broadcaster_id,"user_id":broadcaster_id},"user:read:chat"),
+      ("channel.update","2",{"broadcaster_user_id":broadcaster_id},None),
       ("stream.online","1",{"broadcaster_user_id":broadcaster_id},None),
       ("stream.offline","1",{"broadcaster_user_id":broadcaster_id},None),
       ("channel.raid","1",{"to_broadcaster_user_id":broadcaster_id},None),
@@ -116,6 +117,12 @@ def eventsub_event(message):
     meta=message.get("metadata",{}); sub=message.get("payload",{}).get("subscription",{}); raw=message.get("payload",{}).get("event",{})
     kind=sub.get("type",""); event_id=meta.get("message_id")
     if not event_id or not raw: return
+    if kind=="channel.update":
+        from .relics import update_stream_context
+        context=update_stream_context(raw.get("category_name",""),raw.get("title",""))
+        from .runtime import publish
+        publish({"kind":"stream_context","context":context})
+        return
     names={"channel.chat.message":"chat.message","stream.online":"stream.online","stream.offline":"stream.offline","channel.follow":"follow","channel.subscribe":"subscription","channel.subscription.message":"subscription","channel.subscription.gift":"gift_sub","channel.raid":"raid.incoming","channel.channel_points_custom_reward_redemption.add":"redemption","channel.cheer":"cheer"}
     event_type=names.get(kind)
     if not event_type: return
@@ -136,8 +143,32 @@ def eventsub_event(message):
         event_text="Viewer requested memory deletion"
         emit_event(event_type,viewer,event_text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":event_text,"twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
         forget_viewer(viewer_id,viewer,ack=True)
+    elif event_type=="chat.message" and text.lower().startswith("!whatdoyouknow"):
+        with runtime.db() as c: forgotten=c.execute("SELECT 1 FROM forgotten WHERE viewer_id=?",(str(viewer_id),)).fetchone() is not None
+        emit_event(event_type,viewer,"Viewer requested a memory status check",source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":"Viewer requested a memory status check","twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
+        if forgotten:
+            # Show explicit deletion confirmation without storing the viewer name or creating new memory.
+            from .runtime import publish, now
+            with runtime.db() as c: muted=c.execute("SELECT value FROM settings WHERE key='muted'").fetchone()["value"]=="true"
+            if not muted:
+                publish({"kind":"reaction","reaction":{"id":"privacy-check:"+event_id,"text":"I don't have any saved memories for you.","trigger":"privacy","viewer":"Lorekeeper","at":now(),"animation":"talk"}})
     else:
-        emit_event(event_type,viewer,text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":text,"twitch_event_type":kind,"broadcaster_user_id":raw.get("broadcaster_user_id")},event_id="twitch:eventsub:"+event_id)
+        emit_event(event_type,viewer,text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":text,"twitch_event_type":kind,"broadcaster_user_id":raw.get("broadcaster_user_id"),"stream_id":raw.get("id") if event_type=="stream.online" else None},event_id="twitch:eventsub:"+event_id)
+
+def sync_stream_context(access,broadcaster_id):
+    """Seed category context at connect; channel.update keeps it fresh afterwards."""
+    try:
+        query=urllib.parse.urlencode({"broadcaster_id":broadcaster_id})
+        channels=helix_request("channels?"+query,access).get("data",[])
+        if not channels: return
+        channel=channels[0]
+        from .relics import update_stream_context
+        context=update_stream_context(channel.get("game_name",""),channel.get("title",""),channel.get("tags",[]))
+        from .runtime import publish
+        publish({"kind":"stream_context","context":context})
+    except Exception as exc:
+        # Category discovery is optional; lore text remains the deterministic fallback.
+        print(f"Twitch stream category unavailable; relics will use memory context: {str(exc)[:180]}",flush=True)
 
 async def eventsub_connection(url,stop,reconnecting=False):
     import websockets
@@ -160,6 +191,7 @@ async def eventsub_connection(url,stop,reconnecting=False):
                     with token_lock: authorized=dict(twitch_tokens or {})
                     twitch_status["channel"]=authorized.get("login",""); twitch_status["login"]=authorized.get("login","")
                     scopes=set(authorized.get("scope",[]))
+                    await asyncio.to_thread(sync_stream_context,token,authorized["user_id"])
                     await asyncio.to_thread(subscribe_eventsub,token,session,authorized["user_id"],scopes)
                 reconnecting=False
             elif kind=="notification":
