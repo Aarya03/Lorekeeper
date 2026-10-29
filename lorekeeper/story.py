@@ -51,28 +51,24 @@ def _counts(c, row):
 
 
 def _outcome_text(c, row):
-    relic = relics.for_chapter(c, row["id"])
-    name = relic["name"] if relic else "the community relic"
-    memory = summarize_lore(row["seed_lore"])
     counts = _counts(c, row)
     if not counts.get("A", 0) and not counts.get("B", 0):
-        return f"Chat left {name} untouched this time. The field log keeps this observation ready for another investigation: {memory}"
+        return "No one voted this round, so the charm was unchanged. The community memory is still available for another hunt."
     winner = row["winning_choice"]
     if winner == "A":
         if "no charge left" in str(row["result"] or "").casefold():
-            return f"Chat focused the clue and revealed an early hint. {name} still gained research progress: {memory}"
-        return f"Chat deployed {name} and revealed an early hint, accelerating its evolution. The observation carried forward: {memory}"
+            return "Chat revealed an early hint. The charm had no charge to spend, but still gained resonance."
+        return "Chat revealed an early hint. The charm spent one charge and gained resonance."
     if winner == "B":
-        return f"Chat preserved {name}, kept the first hint sealed, and extended the search by 20 seconds. This observation stays ready for another investigation: {memory}"
-    return f"The vote split. {name} keeps both paths open while the field log carries this observation forward: {memory}"
+        if "already carrying the maximum wards" in str(row["result"] or "").casefold():
+            return "Chat kept the first hint hidden and extended the hunt by 20 seconds. The charm is at its ward limit and gained resonance."
+        return "Chat kept the first hint hidden and extended the hunt by 20 seconds. The charm gained one ward to protect a future encounter."
+    return "The vote tied, so neither path won. The charm kept its charge and gained resonance."
 
 
-def _chapter_intro(c, ordinal, relic, seed, previous):
-    clue = summarize_lore(seed).rstrip(".!?")
-    opening = (f"Building on the last finding, the field notes point to {clue}." if previous
-               else f"The field notes point to {clue}.")
-    return (f"{opening} Chat chooses how {relic['name']} enters the lore-boss round: "
-            "deploy it to reveal an early hint, or preserve the sample for a longer search.")
+def _chapter_intro():
+    return ("This hunt is based on an approved community memory. "
+            "Chat can reveal an early hint now or keep it hidden to gain 20 extra seconds.")
 
 
 def _fallback_title(ordinal, seed):
@@ -99,6 +95,10 @@ def _public(c, row):
         choice_a, detail_a = use
         choice_b, detail_b = protect
     safe_intro = str(row["intro"] or "").replace(str(row["seed_lore"] or ""), summarize_lore(row["seed_lore"]))
+    # Older chapter rows stored the entire previous encounter result in front
+    # of the new prologue, repeating the same approved observation twice.
+    if safe_intro.casefold().startswith("the previous investigation carries into the research notes:"):
+        safe_intro = _chapter_intro()
     return {
         "id": row["id"], "ordinal": row["ordinal"], "title": row["title"],
         "seed_lore": summarize_lore(row["seed_lore"]), "intro": safe_intro,
@@ -213,15 +213,14 @@ def start_chapter():
         seconds = max(15, min(180, int(os.environ.get("LOREKEEPER_CHAPTER_VOTE_SECONDS", "45"))))
         chapter_id = str(uuid.uuid4())
         ordinal = c.execute("SELECT COALESCE(MAX(ordinal),0)+1 n FROM chapters").fetchone()["n"]
-        intro = _chapter_intro(c, ordinal, relic, seed, previous)
-        previous_result = str(previous["result"] or "") if previous else ""
+        intro = _chapter_intro()
+        previous_result = ""
         if previous:
-            previous_boss = c.execute("SELECT result FROM game_rounds WHERE chapter_id=? AND mode='live' ORDER BY started_at DESC LIMIT 1", (previous["id"],)).fetchone()
-            signal_boss = c.execute("SELECT result FROM signal_rounds WHERE chapter_id=? AND mode='live' ORDER BY started_at DESC LIMIT 1", (previous["id"],)).fetchone()
-            previous_boss = signal_boss if signal_boss and signal_boss["result"] else previous_boss
-            if previous_boss and previous_boss["result"]:
-                previous_result = (previous_result + " " + previous_boss["result"]).strip()
-                intro = ("The previous investigation carries into the research notes: " + previous_boss["result"] + " " + intro).strip()
+            previous_result = (f"Previous chapter: {previous['title']}. Community choice: {previous['winning_choice'] or 'not recorded'}. ")
+            previous_signal = c.execute("SELECT target_word,solved FROM signal_rounds WHERE chapter_id=? AND mode='live' ORDER BY started_at DESC LIMIT 1", (previous["id"],)).fetchone()
+            if previous_signal:
+                outcome = "chat solved it" if previous_signal["solved"] else "time ran out"
+                previous_result += f"Previous signal answer: {previous_signal['target_word']}; {outcome}."
         use, protect = relics.vote_choices(relic)
         stream_context = relics.stream_context(c)
         expected_previous_ordinal = ordinal - 1

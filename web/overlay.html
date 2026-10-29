@@ -6,10 +6,13 @@
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:#edf0e5;font-family:'DM Sans',Arial,sans-serif}
 .story-card{position:absolute;left:4vw;top:4vh;width:min(490px,44vw);padding:20px 22px 17px;border:1px solid #bfd89b70;border-radius:13px;background:linear-gradient(145deg,#101811ec,#101510de);box-shadow:0 12px 34px #0007;backdrop-filter:blur(8px);color:#edf0e5;transition:opacity .35s,transform .35s}.story-card.path-a{border-color:#b8df8c;background:linear-gradient(145deg,#17221aef,#101510e8)}.story-card.path-b{border-color:#c4a9e5;background:linear-gradient(145deg,#211b28ef,#101510e8)}
-.story-card.hidden{display:none}.eyebrow{font:10px 'DM Mono',monospace;letter-spacing:1.4px;color:#c2e2a0;display:flex;justify-content:space-between}.chapter-title{font:700 clamp(19px,2vw,27px)/1.16 'Manrope','DM Sans',sans-serif;letter-spacing:-.6px;margin:10px 0 8px}.chapter-intro{font-size:12px;line-height:1.5;color:#b9c4b3;margin:0 0 12px}.clue{padding:9px 11px;border:1px solid #87997550;background:#c8e5a00e;border-radius:7px}.clue-label{font:8px 'DM Mono',monospace;letter-spacing:1px;color:#a9c88d}.clue-text{font-size:11px;line-height:1.45;color:#e5ecdf;margin-top:5px}.vote-option{margin-top:10px}.vote-line{display:flex;align-items:center;gap:8px;font-size:10px}.vote-key{width:20px;height:20px;border-radius:5px;background:#32432a;color:#e1f0cc;display:grid;place-items:center;font:600 10px 'DM Mono',monospace}.vote-name{flex:1;color:#e6ebdf;font-weight:600}.vote-count{font:9px 'DM Mono',monospace;color:#b5d297}.track{height:4px;background:#30382e;border-radius:6px;margin:5px 0 0 28px;overflow:hidden}.track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#8db86a,#c7e9a2);border-radius:6px;transition:width .4s}.result{border-top:1px solid #74836355;margin-top:12px;padding-top:10px;font-size:11px;line-height:1.45;color:#dcebd0}.vote-hint{font:8px 'DM Mono',monospace;color:#9ba994;margin-top:10px}.keeper{position:absolute;left:4vw;bottom:7vh;width:min(380px,70vw);display:flex;align-items:flex-end;gap:12px;opacity:.97;transition:opacity .35s}.keeper.hidden{opacity:0;pointer-events:none}.character{position:relative;flex:0 0 94px;height:112px;filter:drop-shadow(0 8px 13px #0008);animation:bob 4s ease-in-out infinite}.ear{position:absolute;top:1px;width:27px;height:49px;border:1px solid #d5e9b2;border-radius:70% 70% 12% 12%;background:#a9c783}.ear.left{left:11px;transform:rotate(-21deg)}.ear.right{right:11px;transform:rotate(21deg)}.face{position:absolute;z-index:1;top:17px;left:2px;width:90px;height:79px;border:1px solid #e1efc15c;border-radius:48%;background:radial-gradient(ellipse at 40% 25%,#e6efcf,#bed796 58%,#849d64);box-shadow:inset 0 -8px 15px #596e423d}.eye{position:absolute;top:38px;width:6px;height:9px;border-radius:50%;background:#263328}.eye.one{left:25px}.eye.two{right:25px}.cheek{position:absolute;top:52px;width:13px;height:6px;border-radius:50%;background:#d68d80a6}.cheek.one{left:11px}.cheek.two{right:11px}.mouth{position:absolute;top:52px;left:42px;width:7px;height:6px;border-bottom:1.5px solid #45543a;border-radius:0 0 9px 9px}.scarf{position:absolute;z-index:2;top:88px;left:10px;width:73px;height:11px;border-radius:50%;background:#d08364}.scarf:after{content:'';position:absolute;right:12px;top:5px;width:13px;height:18px;background:#d08364;clip-path:polygon(0 0,100% 0,80% 100%)}.bubble{position:relative;max-width:265px;margin-bottom:18px;padding:11px 14px;border:1px solid #c8e3a155;border-radius:10px;background:#111811ef;box-shadow:0 5px 20px #0005;color:#f1f3e8;font-size:13px;line-height:1.45;opacity:0;transform:translateY(7px);transition:.25s}.bubble.show{opacity:1;transform:translateY(0)}.bubble:after{content:'';position:absolute;left:-6px;bottom:15px;width:10px;height:10px;transform:rotate(45deg);background:#111811;border-left:1px solid #c8e3a155;border-bottom:1px solid #c8e3a155}.brand{position:absolute;right:16px;bottom:13px;color:#d8e8c1a8;font:10px 'DM Mono',monospace;letter-spacing:1.5px;text-shadow:0 2px 5px #000}
+.story-card.hidden{display:none}.eyebrow{font:10px 'DM Mono',monospace;letter-spacing:1.4px;color:#c2e2a0;display:flex;justify-content:space-between}.chapter-title{font:700 clamp(19px,2vw,27px)/1.16 'Manrope','DM Sans',sans-serif;letter-spacing:-.6px;margin:10px 0 8px}.chapter-intro{font-size:13px;line-height:1.5;color:#d0d8ca;margin:0 0 12px}.clue{padding:10px 12px;border:1px solid #87997550;background:#c8e5a00e;border-radius:7px}.clue-label{font:9px 'DM Mono',monospace;letter-spacing:1px;color:#a9c88d}.clue-text{font-size:13px;line-height:1.5;color:#e5ecdf;margin-top:5px}.vote-options.hidden{display:none}.vote-option{margin-top:10px}.vote-line{display:flex;align-items:center;gap:8px;font-size:12px}.vote-key{width:24px;height:24px;border-radius:5px;background:#32432a;color:#e1f0cc;display:grid;place-items:center;font:600 11px 'DM Mono',monospace}.vote-name{flex:1;color:#e6ebdf;font-weight:600}.vote-count{font:10px 'DM Mono',monospace;color:#b5d297}.track{height:5px;background:#30382e;border-radius:6px;margin:6px 0 0 32px;overflow:hidden}.track i{display:block;width:0;height:100%;background:linear-gradient(90deg,#8db86a,#c7e9a2);border-radius:6px;transition:width .4s}.result{border-top:1px solid #74836355;margin-top:12px;padding-top:10px;font-size:13px;line-height:1.5;color:#dcebd0}.vote-hint{font:10px 'DM Mono',monospace;color:#b8c4ad;margin-top:10px}.keeper{position:absolute;left:4vw;bottom:7vh;width:min(380px,70vw);display:flex;align-items:flex-end;gap:12px;opacity:.97;transition:opacity .35s}.keeper.hidden{opacity:0;pointer-events:none}.character{position:relative;flex:0 0 94px;height:112px;filter:drop-shadow(0 8px 13px #0008);animation:bob 4s ease-in-out infinite}.ear{position:absolute;top:1px;width:27px;height:49px;border:1px solid #d5e9b2;border-radius:70% 70% 12% 12%;background:#a9c783}.ear.left{left:11px;transform:rotate(-21deg)}.ear.right{right:11px;transform:rotate(21deg)}.face{position:absolute;z-index:1;top:17px;left:2px;width:90px;height:79px;border:1px solid #e1efc15c;border-radius:48%;background:radial-gradient(ellipse at 40% 25%,#e6efcf,#bed796 58%,#849d64);box-shadow:inset 0 -8px 15px #596e423d}.eye{position:absolute;top:38px;width:6px;height:9px;border-radius:50%;background:#263328}.eye.one{left:25px}.eye.two{right:25px}.cheek{position:absolute;top:52px;width:13px;height:6px;border-radius:50%;background:#d68d80a6}.cheek.one{left:11px}.cheek.two{right:11px}.mouth{position:absolute;top:52px;left:42px;width:7px;height:6px;border-bottom:1.5px solid #45543a;border-radius:0 0 9px 9px}.scarf{position:absolute;z-index:2;top:88px;left:10px;width:73px;height:11px;border-radius:50%;background:#d08364}.scarf:after{content:'';position:absolute;right:12px;top:5px;width:13px;height:18px;background:#d08364;clip-path:polygon(0 0,100% 0,80% 100%)}.bubble{position:relative;max-width:265px;margin-bottom:18px;padding:11px 14px;border:1px solid #c8e3a155;border-radius:10px;background:#111811ef;box-shadow:0 5px 20px #0005;color:#f1f3e8;font-size:13px;line-height:1.45;opacity:0;transform:translateY(7px);transition:.25s}.bubble.show{opacity:1;transform:translateY(0)}.bubble:after{content:'';position:absolute;left:-6px;bottom:15px;width:10px;height:10px;transform:rotate(45deg);background:#111811;border-left:1px solid #c8e3a155;border-bottom:1px solid #c8e3a155}.brand{position:absolute;right:16px;bottom:13px;color:#d8e8c1a8;font:10px 'DM Mono',monospace;letter-spacing:1.5px;text-shadow:0 2px 5px #000}
 @keyframes bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}.keeper.celebrate .character{animation:celebrate .45s ease-in-out 4}@keyframes celebrate{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg) translateY(-8px)}75%{transform:rotate(9deg) translateY(-8px)}}
 @media(max-width:700px){.story-card{left:3vw;top:3vh;width:70vw;padding:14px}.chapter-title{font-size:19px}.keeper{left:3vw;bottom:4vh}.brand{right:10px;bottom:8px}}
 .vote-name{min-width:0;line-height:1.35}.vote-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.vote-copy .vote-name{flex:0 0 auto}.vote-detail{font-size:9px;line-height:1.35;color:#b9c4b3}
+.boss-warning{margin-top:10px;padding:8px 10px;border:1px solid #bd6559;border-radius:7px;color:#ffe4ce;background:#4a2825;font-size:12px;line-height:1.4}
+.story-card{width:min(560px,48vw);padding:22px 24px 19px}.chapter-title{font-size:clamp(23px,2.2vw,30px)}.chapter-intro,.clue-text{font-size:14px}.clue{padding:11px 13px}.clue-label{font-size:10px}.vote-line{font-size:13px}.vote-detail{font-size:12px}.vote-count{font-size:11px}.result{font-size:14px}.vote-hint{font-size:11px}.active-relic-top{font-size:9px}.active-relic-copy strong{font-size:14px}.active-relic-copy p{font-size:11px}.active-relic-meta{font-size:8px}.boss-card{width:min(560px,48vw)}.boss-card p{font-size:15px}.boss-clue{font-size:16px}.boss-feed{font-size:13px}.boss-list-title{margin-top:12px;color:#ffc18c;font:600 10px 'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase}.boss-commands{font-size:11px}
+@media(max-width:700px){.story-card,.boss-card{left:16px;top:16px;width:calc(100vw - 32px);padding:16px}.chapter-title{font-size:22px}.keeper{left:16px;bottom:4vh}}
 </style>
 <style>
 .active-relic{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center;margin-top:10px;padding:8px 10px;border:1px solid #a98cff66;border-radius:9px;background:linear-gradient(110deg,#302741b8,#22253ab8)}.active-relic.hidden{display:none}.active-relic-art{width:56px;height:56px;display:grid;place-items:center;border-radius:8px;background:radial-gradient(circle,#694e8055,transparent 70%)}.active-relic-art svg{width:55px;height:55px;filter:drop-shadow(0 0 8px #bd9aff88);animation:relic-float 3s ease-in-out infinite}.active-relic-copy{min-width:0}.active-relic-top{display:flex;justify-content:space-between;gap:5px;color:#d8caff;font:8px 'DM Mono',monospace;letter-spacing:.6px;text-transform:uppercase}.active-relic-copy strong{display:block;margin-top:3px;color:#fff5ff;font:600 12px 'Manrope',sans-serif}.active-relic-copy p{margin:3px 0;color:#c5bfd2;font-size:9px;line-height:1.3}.active-relic-meter{height:3px;background:#484359;border-radius:5px;overflow:hidden;margin-top:5px}.active-relic-meter i{display:block;height:100%;background:linear-gradient(90deg,#a98cff,#f19ac0);transition:width .5s}.active-relic-meta{display:flex;justify-content:space-between;margin-top:3px;color:#a9a2b8;font:7px 'DM Mono',monospace}
@@ -18,17 +21,19 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 </style></head>
 <body>
 <section class="story-card hidden" id="story-card" aria-live="polite">
-  <div class="eyebrow"><span id="chapter-kicker">THE COMMUNITY FIELD STUDY</span><span id="chapter-clock"></span></div>
+  <div class="eyebrow"><span id="chapter-kicker">ROUND 1 · VOTING</span><span id="chapter-clock"></span></div>
   <h1 class="chapter-title" id="chapter-title">A new investigation begins</h1>
   <p class="chapter-intro" id="chapter-intro"></p>
-  <div class="clue"><div class="clue-label">A COMMUNITY OBSERVATION</div><div class="clue-text" id="chapter-seed"></div></div>
+  <div class="clue"><div class="clue-label">MEMORY</div><div class="clue-text" id="chapter-seed"></div></div>
   <div class="active-relic hidden" id="active-relic"><div class="active-relic-art" id="active-relic-art"></div><div class="active-relic-copy"><div class="active-relic-top"><span id="active-relic-type"></span><span id="active-relic-tier"></span></div><strong id="active-relic-name"></strong><p id="active-relic-power"></p><div class="active-relic-meter"><i id="active-relic-progress"></i></div><div class="active-relic-meta"><span id="active-relic-resonance"></span><span id="active-relic-charges"></span></div></div></div>
-  <div class="vote-option"><div class="vote-line"><span class="vote-key">A</span><div class="vote-copy"><strong class="vote-name" id="choice-a"></strong><small class="vote-detail" id="choice-a-detail"></small></div><span class="vote-count" id="votes-a"></span></div><div class="track"><i id="bar-a"></i></div></div>
-  <div class="vote-option"><div class="vote-line"><span class="vote-key">B</span><div class="vote-copy"><strong class="vote-name" id="choice-b"></strong><small class="vote-detail" id="choice-b-detail"></small></div><span class="vote-count" id="votes-b"></span></div><div class="track"><i id="bar-b"></i></div></div>
+  <div class="vote-options" id="vote-options">
+    <div class="vote-option"><div class="vote-line"><span class="vote-key">A</span><div class="vote-copy"><strong class="vote-name" id="choice-a">Reveal a hint now</strong><small class="vote-detail" id="choice-a-detail">Hint 1 appears when the Hunt starts.</small></div><span class="vote-count" id="votes-a"></span></div><div class="track"><i id="bar-a"></i></div></div>
+    <div class="vote-option"><div class="vote-line"><span class="vote-key">B</span><div class="vote-copy"><strong class="vote-name" id="choice-b">+20 seconds, hint stays hidden</strong><small class="vote-detail" id="choice-b-detail">The Hunt starts without hint 1.</small></div><span class="vote-count" id="votes-b"></span></div><div class="track"><i id="bar-b"></i></div></div>
+  </div>
   <div class="result hidden" id="chapter-result"></div>
-  <div class="vote-hint" id="vote-hint">VOTE IN TWITCH CHAT: !VOTE A OR !VOTE B</div>
+  <div class="vote-hint" id="vote-hint">VOTE IN CHAT: !VOTE A OR !VOTE B</div>
 </section>
-<section id="boss-card" class="boss-card hidden" aria-live="polite"><div class="boss-kicker"><span id="boss-round-label">LIVE LORE SIGNAL HUNT</span><span id="boss-round-clock"></span></div><h1 id="boss-round-name"></h1><p id="boss-round-epithet"></p><div class="boss-clue"><b>FIELD CLUE</b><div id="boss-round-clue"></div><div id="boss-round-hint" style="margin-top:7px;color:#ffc18c"></div></div><div class="boss-health"><i id="boss-round-hp"></i></div><div class="boss-meter"><span id="boss-round-hp-label"></span><span id="boss-round-meters"></span></div><div class="boss-feed" id="boss-round-feed"></div><div class="boss-commands">CHAT: !GUESS WORD · HEAT RISES AS MEANING GETS CLOSER</div></section>
+<section id="boss-card" class="boss-card hidden" aria-live="polite"><div class="boss-kicker"><span id="boss-round-label">LIVE HUNT</span><span id="boss-round-clock"></span></div><h1 id="boss-round-name"></h1><p id="boss-round-epithet"></p><div class="boss-clue"><b>CLUE</b><div id="boss-round-clue"></div><div id="boss-round-hint" style="margin-top:7px;color:#ffc18c"></div></div><div id="boss-round-warning" class="boss-warning hidden"></div><div class="boss-health"><i id="boss-round-hp"></i></div><div class="boss-meter"><span id="boss-round-hp-label"></span><span id="boss-round-meters"></span></div><div class="boss-list-title">Closest guesses</div><div class="boss-feed" id="boss-round-closest"></div><div class="boss-list-title">Recent guesses</div><div class="boss-feed" id="boss-round-feed"></div><div class="boss-commands">CHAT: !GUESS WORD</div></section>
 <div class="keeper hidden" id="keeper"><div class="character"><div class="ear left"></div><div class="ear right"></div><div class="face"><i class="eye one"></i><i class="eye two"></i><i class="cheek one"></i><i class="cheek two"></i><i class="mouth"></i></div><div class="scarf"></div></div><div class="bubble" id="bubble"></div></div>
 <div class="brand">✳ &nbsp; LOREKEEPER · CHAT TAKES ON THE NEXT LORE BOSS</div>
 <script>
@@ -36,6 +41,15 @@ const keeper=document.querySelector('#keeper'),bubble=document.querySelector('#b
 let speechTimer,muted=false,currentChapter=null,lastSeq=Number(sessionStorage.getItem('lorekeeper-overlay-seq')||0);
 const bossCard=document.querySelector('#boss-card');
 let lastGameStatus='',lastGameId='',gameResolvedAt=0;
+function readableMemory(value){
+  return String(value||'').replace(/\s+/g,' ').trim()
+    .replace(/^chat keeps returning to\s+remember\s+/i,'')
+    .replace(/^chat keeps returning to\s+/i,'')
+    .replace(/^chat keeps saying\s+/i,'')
+    .replace(/^remember\s+/i,'')
+    .replace(/^["“]+|["”]+$/g,'')
+    .replace(/^./,first=>first.toLocaleUpperCase());
+}
 function showGame(game){
   const active=game&&game.status==='ACTIVE';
   if(game&&game.id!==lastGameId){lastGameId=game.id;lastGameStatus=''}
@@ -46,16 +60,21 @@ function showGame(game){
   bossCard.classList.toggle('hidden',!show);
   if(show){
     card.classList.add('hidden');
-    document.querySelector('#boss-round-label').textContent=game.mode==='simulation'?'SIMULATED SIGNAL HUNT':'LIVE TWITCH · LORE SIGNAL HUNT';
+    document.querySelector('#boss-round-label').textContent=game.mode==='simulation'?'SYNTHETIC PREVIEW':'LIVE TWITCH · HUNT';
     document.querySelector('#boss-round-clock').textContent=active?'0:'+String(game.seconds_left).padStart(2,'0'):game.solved?'SIGNAL FOUND':'TIME';
     document.querySelector('#boss-round-name').textContent=game.boss_name;
-    document.querySelector('#boss-round-epithet').textContent=active?game.boss_epithet+' · Relic: '+game.relic_name:game.result;
+    document.querySelector('#boss-round-epithet').textContent=active?game.boss_epithet+' · Charm: '+game.relic_name:game.result;
     document.querySelector('#boss-round-clue').textContent=game.clue||'';
-    document.querySelector('#boss-round-hint').textContent=game.target_word?'ANSWER: '+game.target_word.toUpperCase():game.hint?`HINT ${game.hint_stage}: ${game.hint}`:'A hint will unlock as chat explores.';
+    document.querySelector('#boss-round-hint').textContent=game.status==='RESOLVED'&&game.target_word?'ANSWER: '+game.target_word.toUpperCase():game.hint?`HINT ${game.hint_stage}: ${game.hint}`:'A hint will unlock as chat explores.';
+    const warning=document.querySelector('#boss-round-warning');
+    warning.textContent=game.scoring_error||game.input_notice||'';
+    warning.classList.toggle('hidden',!warning.textContent);
     document.querySelector('#boss-round-hp').style.width=Math.max(0,game.hp*100/game.max_hp)+'%';
     document.querySelector('#boss-round-hp-label').textContent='DISTANCE '+game.hp+' / 100';
-    document.querySelector('#boss-round-meters').textContent=game.best_guess?'BEST HEAT '+game.best_band+' · '+game.best_heat+'%':'SIGNAL NOT FOUND';
-    document.querySelector('#boss-round-feed').replaceChildren(...(game.feed||[]).slice(0,4).map(action=>{const node=document.createElement('span');node.textContent=action.viewer+' guessed '+action.guess+' · '+action.heat+'% heat';return node}));
+    document.querySelector('#boss-round-meters').textContent=game.best_guess?'BEST HEAT '+game.best_band+' · '+game.best_heat+'% · #'+game.best_rank+' CLOSEST':'NO GUESSES YET';
+    if(game.guess_latency_p95_ms!=null)document.querySelector('#boss-round-meters').textContent+=' - p95 '+game.guess_latency_p95_ms+'ms';
+    document.querySelector('#boss-round-closest').replaceChildren(...(game.closest_guesses||[]).slice(0,5).map(action=>{const node=document.createElement('span');node.textContent='#'+action.rank+' closest · '+action.viewer+' guessed '+action.guess+' · '+action.heat+'%';return node}));
+    document.querySelector('#boss-round-feed').replaceChildren(...(game.feed||[]).slice(0,3).map(action=>{const node=document.createElement('span');node.textContent=action.viewer+' guessed '+action.guess+' · #'+action.rank+' closest';return node}));
     bossCard.classList.toggle('surge',game.seconds_left<=10);
   }else if(currentChapter) card.classList.remove('hidden');
 }
@@ -67,12 +86,12 @@ function showRelic(relic){
   const box=document.querySelector('#active-relic');
   if(!relic){box.classList.add('hidden');return}
   box.classList.remove('hidden');
-  document.querySelector('#active-relic-type').textContent=relic.stream_label;
-  document.querySelector('#active-relic-tier').textContent=relic.stage_name;
+  document.querySelector('#active-relic-type').textContent='CHARM';
+  document.querySelector('#active-relic-tier').textContent='LEVEL '+(Number(relic.stage||0)+1);
   document.querySelector('#active-relic-name').textContent=relic.name;
   document.querySelector('#active-relic-power').textContent=relic.power_name+' · '+relic.power_text;
-  document.querySelector('#active-relic-resonance').textContent=relic.resonance+' RESONANCE';
-  document.querySelector('#active-relic-charges').textContent=relic.charge+'/'+relic.max_charge+' CHARGES · '+relic.wards+' WARDS';
+  document.querySelector('#active-relic-resonance').textContent=relic.resonance+' PROGRESS';
+  document.querySelector('#active-relic-charges').textContent=relic.charge+'/'+relic.max_charge+' USES · '+relic.wards+' SHIELDS';
   const thresholds=[0,30,100,250,600],stage=Number(relic.stage)||0,next=relic.next_stage_at;
   const pct=next?Math.max(0,Math.min(100,(relic.resonance-thresholds[stage])*100/(next-thresholds[stage]))):100;
   document.querySelector('#active-relic-progress').style.width=pct+'%';
@@ -87,33 +106,37 @@ function showChapter(chapter){
   currentChapter=chapter;
   if(!chapter){card.classList.add('hidden');card.classList.remove('path-a','path-b');return}
   card.classList.remove('hidden');
-  document.querySelector('#chapter-kicker').textContent='FIELD STUDY '+chapter.ordinal+' · '+(chapter.status==='VOTING'?'CHAT DECIDES':'THE FINDING IS RECORDED');
-  document.querySelector('#chapter-title').textContent=chapter.title||'A new investigation begins';
-  document.querySelector('#chapter-intro').textContent=chapter.intro;
-  document.querySelector('#chapter-seed').textContent=chapter.seed_lore;
+  const voting=chapter.status==='VOTING';
+  document.querySelector('#chapter-kicker').textContent='ROUND '+chapter.ordinal+' · '+(voting?'VOTE OPEN':'VOTE COMPLETE');
+  const title=(chapter.title||'A new Hunt begins').replace(/^(?:Field Study|Round)\s+\d+\s*:\s*/i,'');
+  document.querySelector('#chapter-title').textContent='Round '+chapter.ordinal+': '+title;
+  document.querySelector('#chapter-intro').textContent=voting?'Chat chooses whether the Hunt starts with an early hint or more time.':chapter.winning_choice==='A'?'Chat revealed an early hint. The Hunt is ready to start.':chapter.winning_choice==='B'?'Chat kept the hint hidden and added 20 seconds to the Hunt.':'The vote tied. The Hunt is ready with its default hint.';
+  document.querySelector('#chapter-seed').textContent=readableMemory(chapter.seed_lore);
   showRelic(chapter.relic);
-  document.querySelector('#choice-a').textContent=chapter.choices.A;
-  document.querySelector('#choice-b').textContent=chapter.choices.B;
-  document.querySelector('#choice-a-detail').textContent=chapter.choice_details?.A||'';
-  document.querySelector('#choice-b-detail').textContent=chapter.choice_details?.B||'';
+  document.querySelector('#choice-a').textContent='Reveal a hint now';
+  document.querySelector('#choice-b').textContent='+20 seconds, hint stays hidden';
+  document.querySelector('#choice-a-detail').textContent='Hint 1 appears when the Hunt starts.';
+  document.querySelector('#choice-b-detail').textContent='The Hunt starts without hint 1.';
   const a=Number(chapter.votes.A||0),b=Number(chapter.votes.B||0),total=a+b;
   document.querySelector('#votes-a').textContent=a+' vote'+(a===1?'':'s');
   document.querySelector('#votes-b').textContent=b+' vote'+(b===1?'':'s');
   document.querySelector('#bar-a').style.width=(total?Math.round(a*100/total):0)+'%';
   document.querySelector('#bar-b').style.width=(total?Math.round(b*100/total):0)+'%';
   const result=document.querySelector('#chapter-result'),hint=document.querySelector('#vote-hint');
-  if(chapter.status==='VOTING'){
+  document.querySelector('#vote-options').classList.toggle('hidden',!voting);
+  if(voting){
     card.classList.remove('path-a','path-b');
-    result.classList.add('hidden');hint.textContent='VOTE IN TWITCH CHAT: !VOTE A OR !VOTE B';
+    result.classList.add('hidden');hint.textContent='VOTE IN CHAT: !VOTE A OR !VOTE B';
     const remaining=Math.max(0,Math.ceil((new Date(chapter.closes_at)-Date.now())/1000));
     document.querySelector('#chapter-clock').textContent=Math.floor(remaining/60)+':'+String(remaining%60).padStart(2,'0')+' LEFT';
   }else{
     card.classList.toggle('path-a',chapter.winning_choice==='A');
     card.classList.toggle('path-b',chapter.winning_choice==='B');
-    result.classList.remove('hidden');result.textContent=chapter.result;
-    hint.textContent='THE CHAT CHOSE '+(chapter.winning_choice==='TIE'?'BOTH PATHS':'PATH '+chapter.winning_choice)+' · '+total+' VOTES';
+    result.classList.remove('hidden');
+    result.textContent=chapter.winning_choice==='A'?'Chat chose to reveal an early hint for the Hunt.':chapter.winning_choice==='B'?'Chat kept the hint hidden and added 20 seconds to the Hunt.':'The vote tied. The Hunt will use its default hint.';
+    hint.textContent='CHAT CHOSE '+(chapter.winning_choice==='TIE'?'THE DEFAULT':'OPTION '+chapter.winning_choice)+' · '+total+' VOTES';
     document.querySelector('#chapter-clock').textContent='REVEALED';
-    if(reveal)showReaction({text:chapter.result,animation:'celebrate'});
+    if(reveal)showReaction({text:result.textContent,animation:'celebrate'});
   }
 }
 function showReaction(reaction){

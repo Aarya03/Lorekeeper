@@ -2,12 +2,15 @@ const $ = (selector) => document.querySelector(selector);
 const esc = (value = '') => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const timeLabel = value => { if (!value) return 'now'; const date = new Date(value); return isNaN(date) ? 'now' : date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
 const themeButton = $('#theme-toggle');
+let toastTimer;
+let latestState = null;
+
 function syncThemeControl() {
   const light = document.documentElement.dataset.theme === 'light';
   themeButton.setAttribute('aria-label', `Switch to ${light ? 'dark' : 'light'} mode`);
   themeButton.title = `Switch to ${light ? 'dark' : 'light'} mode`;
-  themeButton.querySelector('.theme-icon').textContent = light ? '\u263E' : '\u263C';
-  themeButton.querySelector('.theme-label').textContent = light ? 'Dark mode' : 'Light mode';
+  themeButton.querySelector('.theme-icon').textContent = light ? '☾' : '☼';
+  themeButton.querySelector('.theme-label').textContent = light ? 'Dark' : 'Light';
 }
 syncThemeControl();
 themeButton.addEventListener('click', () => {
@@ -16,8 +19,7 @@ themeButton.addEventListener('click', () => {
   try { localStorage.setItem('lorekeeper-theme', next); } catch {}
   syncThemeControl();
 });
-let toastTimer;
-let relicRenderKey = '';
+
 function toast(message) {
   const node = $('#toast');
   node.textContent = message;
@@ -25,248 +27,341 @@ function toast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.classList.remove('show'), 2800);
 }
+
 async function api(path, data = {}) {
   const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Request failed');
   return result;
 }
-function renderChapter(chapter, history, activeLoreCount) {
-  window.currentChapterId = chapter?.id || null;
-  const active = chapter && chapter.status === 'VOTING';
-  const exists = Boolean(chapter);
-  $('#chapter-empty').classList.toggle('hide', exists);
-  $('#chapter-live').classList.toggle('hide', !exists);
-  const hasApprovedLore = activeLoreCount > 0;
-  $('#start-chapter').disabled = Boolean(active) || !window.lorekeeperLive || (!exists && !hasApprovedLore);
-  $('#start-chapter').textContent = active ? 'Field study in progress' : (!exists && !hasApprovedLore ? 'Approve an observation first' : 'Start a field study');
-  $('#start-chapter').title = !window.lorekeeperLive ? 'Connect Twitch and wait for Live · EventSub first' : (!exists && !hasApprovedLore ? 'Approve a community observation in the review panel first' : '');
-  if (!exists) {
-    $('#chapter-empty strong').textContent = hasApprovedLore ? 'An approved observation is ready to become a field study.' : 'Approve a community observation to seed the first field study.';
-    $('#chapter-empty span').textContent = hasApprovedLore ? 'Start the field study, then chat votes how its research charm enters the lore-boss encounter.' : 'Review the Community Observations panel, approve a specific chat moment, then start the field study.';
-  }
-  $('#start-boss').classList.toggle('hide', !chapter || chapter.status !== 'RESOLVED');
-  $('#start-boss').disabled = !window.lorekeeperLive;
-  $('#close-chapter').classList.toggle('hide', !active);
-  $('#stat-chapters').textContent = history.filter(item => item.status === 'RESOLVED').length;
-  if (chapter) {
-    $('#chapter-status').textContent = active ? 'VOTING' : 'LAST REVEAL';
-    $('#chapter-title').textContent = chapter.title || ('FIELD STUDY ' + chapter.ordinal);
-    $('#chapter-intro').textContent = chapter.intro;
-    $('#chapter-seed').textContent = chapter.seed_lore;
-    $('#chapter-choice-a').textContent = chapter.choices.A;
-    $('#chapter-choice-b').textContent = chapter.choices.B;
-    $('#chapter-choice-a-detail').textContent = chapter.choice_details?.A || '';
-    $('#chapter-choice-b-detail').textContent = chapter.choice_details?.B || '';
-    const a = Number(chapter.votes.A || 0), b = Number(chapter.votes.B || 0), total = a + b;
-    $('#chapter-votes-a').textContent = a + ' vote' + (a === 1 ? '' : 's');
-    $('#chapter-votes-b').textContent = b + ' vote' + (b === 1 ? '' : 's');
-    $('#chapter-total').textContent = total + ' community vote' + (total === 1 ? '' : 's') + (active ? ' · use !vote A or !vote B in Twitch chat' : '');
-    $('#chapter-bar-a').style.width = (total ? Math.round(a * 100 / total) : 0) + '%';
-    $('#chapter-bar-b').style.width = (total ? Math.round(b * 100 / total) : 0) + '%';
-    $('#chapter-result').classList.toggle('hide', active);
-    $('#chapter-result-copy').classList.toggle('hide', active);
-    if (!active) {
-      const winner = chapter.winning_choice === 'TIE' ? 'BOTH PATHS' : 'PATH ' + chapter.winning_choice;
-      $('#chapter-result').textContent = winner + ' · ' + a + '–' + b;
-      $('#chapter-result-copy').textContent = chapter.result;
-      $('#chapter-clock').textContent = 'FINDING RECORDED';
-    } else {
-      const remaining = Math.max(0, Math.ceil((new Date(chapter.closes_at) - Date.now()) / 1000));
-      $('#chapter-clock').textContent = 'VOTE CLOSES IN ' + Math.floor(remaining / 60) + ':' + String(remaining % 60).padStart(2, '0');
-    }
-  } else {
-    $('#chapter-status').textContent = 'READY';
-    $('#chapter-clock').textContent = '';
-  }
-  const completed = history.filter(item => item.status === 'RESOLVED');
-  $('#history-empty').classList.toggle('hide', completed.length > 0);
-  $('#history-list').innerHTML = completed.map(item =>
-    '<article class="history-item"><b>Field Study ' + item.ordinal + ': ' + esc(item.winning_choice === 'TIE' ? 'Both paths stayed open' : item.choices[item.winning_choice]) + '</b><span>' + esc(item.result) + ' · ' + (Number(item.votes.A || 0) + Number(item.votes.B || 0)) + ' votes</span></article>'
-  ).join('');
+
+function truncateWords(value, max = 210) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const prefix = text.slice(0, max + 1);
+  const boundary = prefix.lastIndexOf(' ');
+  return (prefix.slice(0, boundary > 0 ? boundary : max).trimEnd()) + '…';
 }
-const relicSilhouettes = {
-  reliquary:'M50 7 83 25v34c0 17-13 28-33 35C30 87 17 76 17 59V25z',
-  medallion:'M50 8a34 34 0 1 0 0 68 34 34 0 0 0 0-68M38 72l-5 20 17-9 17 9-5-20',
-  crystal:'M50 5 83 29 70 76 50 94 30 76 17 29z',
-  compass:'M50 8a34 34 0 1 0 0 68 34 34 0 0 0 0-68M58 37 68 27 63 43 42 57 32 67 37 51z',
-  keepsake:'M23 18h54a7 7 0 0 1 7 7v43a7 7 0 0 1-7 7H23a7 7 0 0 1-7-7V25a7 7 0 0 1 7-7M31 75l-5 14 24-11 24 11-5-14'
-};
-const relicGlyphs = {
-  crystal:'M50 23 69 42 50 62 31 42z M50 23v39 M31 42h38',
-  die:'M35 32h30a5 5 0 0 1 5 5v26a5 5 0 0 1-5 5H35a5 5 0 0 1-5-5V37a5 5 0 0 1 5-5z M40 42h1 M59 57h1 M59 42h1 M40 57h1',
-  palette:'M50 27c-15 0-26 10-26 24 0 13 10 23 22 23h7c5 0 8-5 5-9l-3-4c-2-3 0-7 4-7h8c7 0 9-8 5-14-5-8-13-13-22-13z M38 43h1 M48 37h1 M60 43h1',
-  soundwave:'M26 51h7l6-16 11 33 9-25 6 8h9',
-  circuit:'M32 32h17v17H32z M49 40h18v18H49z M40 49v17h-8 M67 49h8v-9',
-  flame:'M50 25c4 12-7 15-5 24 2 5 8 5 9 0 8 9 8 18 2 24-10 11-29 4-29-11 0-10 6-18 13-25-1 9 2 12 6 12 6 0 8-10 4-24z',
-  medal:'M50 32a18 18 0 1 0 0 36 18 18 0 0 0 0-36z M39 65 34 82l16-8 16 8-5-17',
-  orbit:'M50 50m-9 0a9 9 0 1 0 18 0 9 9 0 1 0-18 0 M50 50c-20-25-35-14-24 0 10 13 37 18 48 5 10-13-6-31-22-31-15 0-27 13-26 26',
-  compass:'M50 27 61 50 50 73 39 50z M50 27v46 M27 50h46',
-  eye:'M23 50Q50 24 77 50 50 76 23 50z M50 42a8 8 0 1 0 0 16 8 8 0 0 0 0-16z',
-  lantern:'M37 35h26l5 34H32z M42 27h16v8H42z M39 76h22 M50 35v34',
-  cassette:'M29 35h42v31H29z M36 43h28v10H36z M40 60a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M60 60a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-  gear:'M50 29v8m0 26v8m21-21h-8m-26 0h-8m36-15-6 6m-18 18-6 6m30 0-6-6M41 41l-6-6 M50 41a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
-  microscope:'M39 27h19v8H39z M44 35v20l-9 10h30 M52 39l14 14-7 7-14-14z M33 73h39 M65 60a16 16 0 0 0 10-12',
-  atom:'M50 50c-23-10-29-24-19-29 11-6 28 11 32 29 5 19-2 32-13 29-12-4-17-25 0-42 13-13 29-14 31-3 2 12-18 24-31 16z M50 50h1',
-  flask:'M41 25h18 M46 25v20L31 70h38L54 45V25 M39 61h22',
-  molecule:'M35 35l16 15 17-17 M51 50l-7 19 M35 35a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M61 26a7 7 0 1 0 14 0 7 7 0 0 0-14 0z M37 63a7 7 0 1 0 14 0 7 7 0 0 0-14 0z M44 43a7 7 0 1 0 14 0 7 7 0 0 0-14 0z',
-  telescope:'M28 36l40-12 8 19-40 12z M40 52l10 25 M65 43l7 17 M32 60h38',
-  star:'m50 25 7 17 18 1-14 12 5 18-16-10-16 10 5-18-14-12 18-1z'
-};
-const relicPatterns = {
-  orbit:'<ellipse cx="50" cy="50" rx="39" ry="16" fill="none" stroke="#fff" stroke-opacity=".3" transform="rotate(-28 50 50)"/>',
-  stardust:'<circle cx="28" cy="28" r="2" fill="#fff"/><circle cx="72" cy="34" r="1.5" fill="#fff"/><circle cx="32" cy="68" r="1.5" fill="#fff"/><circle cx="72" cy="70" r="2" fill="#fff"/>',
-  engraving:'<path d="M27 50h6m34 0h6M50 27v6m0 34v6M34 34l5 5m22 22 5 5m0-32-5 5m-22 22-5 5" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>',
-  runes:'<path d="m23 35 6-5 6 5-6 5zm36 0 6-5 6 5-6 5zM23 65l6-5 6 5-6 5zm36 0 6-5 6 5-6 5z" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"/>',
-  ribbons:'<path d="M25 32q25-16 50 0M25 68q25 16 50 0" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>'
-};
-function relicSvg(relic) {
-  const colors = (relic.palette || []).filter(color => /^#[\da-f]{6}$/i.test(color));
-  const first = colors[0] || '#a98cff', second = colors[1] || '#ff9b72';
-  const silhouette = relicSilhouettes[relic.visual?.shape] || relicSilhouettes.reliquary;
-  const glyph = relicGlyphs[relic.visual?.sigil] || relicGlyphs.star;
-  const pattern = relicPatterns[relic.visual?.pattern] || relicPatterns.stardust;
-  return `<svg viewBox="0 0 100 100" role="img" aria-label="${esc(relic.name)} artwork"><defs><linearGradient id="rg-${esc(relic.id)}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${first}"/><stop offset="1" stop-color="${second}"/></linearGradient><radialGradient id="gl-${esc(relic.id)}"><stop stop-color="${second}" stop-opacity=".45"/><stop offset="1" stop-color="${first}" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="48" r="46" fill="url(#gl-${esc(relic.id)})"/><path d="${silhouette}" fill="url(#rg-${esc(relic.id)})" fill-opacity=".24" stroke="url(#rg-${esc(relic.id)})" stroke-width="2.5" stroke-linejoin="round"/>${pattern}<path d="${glyph}" fill="none" stroke="#fff7ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="18" r="2" fill="${second}"/><circle cx="83" cy="77" r="2" fill="${first}"/></svg>`;
+
+function readableMemory(value, max = 210) {
+  let text = String(value || '').replace(/\s+/g, ' ').trim();
+  text = text.replace(/^chat keeps returning to\s+remember\s+/i, '')
+    .replace(/^chat keeps returning to\s+/i, '')
+    .replace(/^chat keeps saying\s+/i, '')
+    .replace(/^remember\s+/i, '')
+    .replace(/^["“]+|["”]+$/g, '');
+  if (text) text = text[0].toLocaleUpperCase() + text.slice(1);
+  return truncateWords(text, max);
 }
-function renderRelics(relics = []) {
-  const signature = JSON.stringify(relics);
-  if (signature === relicRenderKey) return;
-  relicRenderKey = signature;
-  $('#relic-count').textContent = relics.length;
-  $('#relic-empty').classList.toggle('hide', relics.length > 0);
-  $('#relic-grid').innerHTML = relics.map(relic => {
-    const stageStart = [0, 30, 100, 250, 600][Number(relic.stage) || 0];
-    const next = relic.next_stage_at;
-    const progress = next ? Math.max(0, Math.min(100, (relic.resonance - stageStart) * 100 / (next - stageStart))) : 100;
-    const pips = Array.from({length:relic.max_charge}, (_, index) => `<i class="${index < relic.charge ? 'charged' : ''}"></i>`).join('');
-    return `<article class="relic-card" data-stage="${Number(relic.stage) || 0}"><div class="relic-artwork">${relicSvg(relic)}<span class="relic-tier">${esc(relic.stage_name)}</span><div class="relic-charge" aria-label="${relic.charge} of ${relic.max_charge} charges">${pips}</div></div><div class="relic-details"><span class="relic-category">${esc(relic.stream_label)}</span><h3>${esc(relic.name)}</h3><p class="relic-memory">${esc(relic.source_memory || 'A founding memory of the community')}</p><p>${esc(relic.power_text)}</p><div class="relic-power">${esc(relic.power_name)}</div><div class="relic-progress"><i style="width:${progress}%"></i></div><div class="relic-meta"><span>${relic.resonance} resonance</span><span>${relic.wards} wards</span></div></div></article>`;
+
+function readableRoundTitle(value, ordinal) {
+  const title = String(value || '').replace(/^(?:Field Study|Round)\s+\d+\s*:\s*/i, '').trim();
+  return `Round ${ordinal}: ${title || 'Community Hunt'}`;
+}
+
+// Pure view-state derivation: no DOM reads or writes, API calls, or mutations.
+function currentStep(state) {
+  const chapter = state?.chapter;
+  const game = state?.game;
+  if (chapter?.status === 'VOTING') return 'vote';
+  if (game?.status === 'ACTIVE') return 'hunt';
+  if (chapter?.status === 'RESOLVED') {
+    const matchingGame = game?.chapter_id === chapter.id;
+    if (matchingGame && game.status === 'RESOLVED' && (game.mode === 'live' || game.live_completed_for_chapter)) return 'result';
+    return 'hunt';
+  }
+  return 'memories';
+}
+window.currentStep = currentStep;
+
+function applyTabRoute() {
+  const valid = new Set(['stage','memories','history','engineering']);
+  let tab = location.hash.replace(/^#/, '');
+  if (!valid.has(tab)) {
+    tab = 'stage';
+    history.replaceState(null, '', `${location.pathname}${location.search}#stage`);
+  }
+  document.querySelectorAll('[data-panel]').forEach(panel => panel.classList.toggle('hide', panel.dataset.panel !== tab));
+  document.querySelectorAll('[data-tab]').forEach(link => {
+    const selected = link.dataset.tab === tab;
+    link.classList.toggle('active', selected);
+    link.setAttribute('aria-selected', String(selected));
+    link.tabIndex = selected ? 0 : -1;
+  });
+}
+window.addEventListener('hashchange', applyTabRoute);
+applyTabRoute();
+
+function setStep(step) {
+  document.querySelectorAll('[data-view]').forEach(panel => panel.classList.toggle('hide', panel.dataset.view !== step));
+  const order = ['memories','vote','hunt','result'];
+  const index = order.indexOf(step);
+  document.querySelectorAll('#round-steps [data-step]').forEach((item, itemIndex) => {
+    item.classList.toggle('current', item.dataset.step === step);
+    item.classList.toggle('complete', itemIndex < index);
+    if (item.dataset.step === step) item.setAttribute('aria-current','step');
+    else item.removeAttribute('aria-current');
+  });
+  const labels = {
+    memories:['Memories','Choose the memory that starts the next Round.'],
+    vote:['Vote','Chat chooses how the Hunt begins.'],
+    hunt:['Hunt','Chat guesses together in Twitch.'],
+    result:['Round result','See the answer and who helped find it.']
+  };
+  $('#stage-heading').textContent = labels[step][0];
+  $('#stage-subtitle').textContent = labels[step][1];
+  $('#chapter-status').textContent = labels[step][0].toUpperCase();
+}
+
+function latestStageMemory(memories) {
+  return (memories || []).filter(item => item.status === 'PENDING' || item.status === 'ACTIVE')
+    .sort((a,b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
+}
+
+function renderMemoryCards(memories) {
+  $('#lore-empty').classList.toggle('hide', memories.length > 0);
+  $('#pending-pill').textContent = `${memories.filter(item => item.status === 'PENDING').length} pending`;
+  $('#lore-list').innerHTML = memories.map(item => {
+    const pending = item.status === 'PENDING';
+    const approved = item.status === 'ACTIVE';
+    const status = pending ? 'Needs review' : approved ? 'Approved' : item.status === 'REJECTED' ? 'Skipped' : 'Retired';
+    let actions = '';
+    if (pending) actions = `<button class="button secondary" data-action="approve" data-id="${esc(item.id)}">Approve</button><button class="button quiet" data-action="reject" data-id="${esc(item.id)}">Skip</button>`;
+    else if (approved) actions = `<button class="button quiet" data-action="retire" data-id="${esc(item.id)}">Retire</button>`;
+    else actions = `<button class="button secondary" data-action="restore" data-id="${esc(item.id)}">Restore</button><button class="button quiet" data-action="delete" data-id="${esc(item.id)}">Delete</button>`;
+    return `<article class="lore-card"><div class="memory-meta lore-meta"><span class="lore-kind">${status}</span></div><p class="lore-summary">${esc(readableMemory(item.summary, 230))}</p><div class="lore-bottom"><span class="lore-source">${Number(item.mentions)||1} mention${Number(item.mentions)===1?'':'s'}</span><div class="lore-actions">${actions}</div></div></article>`;
   }).join('');
 }
-function render(state) {
-  window.lorekeeperLive = Boolean(state.twitch_eventsub);
-  $('#stat-events').textContent = state.stats.received;
-  $('#stat-lore').textContent = state.lore_counts?.active ?? state.lore.filter(item => item.status === 'ACTIVE').length;
-  $('#stat-pending').textContent = state.pending;
-  $('#narrator-status').textContent = state.narrator_provider || 'Curated templates';
-  $('#pending-pill').textContent = state.pending + ' pending';
-  $('#side-pending').textContent = state.pending;
-  $('#side-pending').classList.toggle('hide', !state.pending);
-  $('#mute-toggle').classList.toggle('on', state.muted);
-  $('#mute-caption').textContent = state.muted ? 'Panic mute is on' : 'The keeper is ready to speak';
-  $('#mute-toggle').setAttribute('aria-label', state.muted ? 'Unmute mascot' : 'Mute mascot');
-  $('#pipeline-label').textContent = state.stats.replay_running ? 'REPLAY' : state.twitch_eventsub ? 'LIVE' : 'READY';
-  $('#uptime').textContent = (state.event_log === 'redpanda' ? 'Redpanda event log' : 'Local event log') + ' · ' + state.stats.uptime + 's uptime';
+
+function renderMemoryStep(state) {
+  const memories = state.lore || [];
+  const selected = latestStageMemory(memories);
+  const approvedCount = Number(state.lore_counts?.active ?? memories.filter(item => item.status === 'ACTIVE').length);
+  $('#chapter-empty').classList.toggle('hide', Boolean(selected));
+  $('#stage-memory-card').classList.toggle('hide', !selected);
+  $('#stage-memory-actions').innerHTML = selected?.status === 'PENDING'
+    ? `<button class="button secondary" data-action="approve" data-id="${esc(selected.id)}">Approve</button><button class="button quiet" data-action="reject" data-id="${esc(selected.id)}">Skip</button>`
+    : selected ? '<span class="approved-label">Approved</span>' : '';
+  if (selected) {
+    $('#stage-memory-state').textContent = selected.status === 'PENDING' ? 'NEEDS REVIEW' : 'APPROVED';
+    $('#stage-memory-count').textContent = `${Number(selected.mentions)||1} mention${Number(selected.mentions)===1?'':'s'}`;
+    $('#stage-memory-summary').textContent = readableMemory(selected.summary, 230);
+  }
+  $('#chapter-empty strong').textContent = approvedCount ? 'No current memory selected.' : 'No approved memory yet.';
+  $('#chapter-empty span').textContent = approvedCount ? 'Choose or approve a memory in the Memories tab.' : 'Review a memory in the Memories tab to begin.';
+  const canStartVote = approvedCount > 0 && selected?.status !== 'PENDING';
+  $('#start-vote').disabled = !window.lorekeeperLive || !canStartVote;
+  $('#start-vote').title = !window.lorekeeperLive ? 'Connect Twitch and wait for Live · EventSub.' : !canStartVote ? 'Approve or skip the memory first.' : '';
+}
+
+function renderVote(state) {
+  const chapter = state.chapter;
+  const voting = chapter?.status === 'VOTING';
+  window.currentChapterId = chapter?.id || null;
+  $('#chapter-live').classList.toggle('hide', !voting);
+  $('#close-chapter').classList.toggle('hide', !voting);
+  if (!chapter) return;
+  window.currentChapterId = chapter.id;
+  $('#chapter-title').textContent = `Round ${chapter.ordinal}`;
+  $('#chapter-intro').textContent = truncateWords(chapter.intro || 'Chat chooses how the Hunt begins.', 230);
+  $('#chapter-seed').textContent = readableMemory(chapter.seed_lore || '', 180);
+  $('#chapter-choice-a').textContent = 'Reveal a hint now';
+  $('#chapter-choice-b').textContent = '+20 seconds, hint stays hidden';
+  $('#chapter-choice-a-detail').textContent = 'Hint 1 appears when the Hunt starts.';
+  $('#chapter-choice-b-detail').textContent = 'The Hunt starts without hint 1.';
+  const votes = chapter.votes || {};
+  const a = Number(votes.A || 0), b = Number(votes.B || 0), total = a+b;
+  $('#chapter-votes-a').textContent = `${a} vote${a===1?'':'s'}`;
+  $('#chapter-votes-b').textContent = `${b} vote${b===1?'':'s'}`;
+  $('#chapter-total').textContent = `${total} vote${total===1?'':'s'}`;
+  $('#chapter-bar-a').style.width = `${total ? Math.round(a*100/total) : 0}%`;
+  $('#chapter-bar-b').style.width = `${total ? Math.round(b*100/total) : 0}%`;
+  $('#chapter-clock').textContent = voting ? `Closes in ${formatClock(Math.max(0,Math.ceil((new Date(chapter.closes_at)-Date.now())/1000)))}` : 'Vote complete';
+  $('#chapter-result').classList.toggle('hide', voting);
+  $('#chapter-result').textContent = `${total} votes`;
+  $('#chapter-result-copy').classList.add('hide');
+  $('#close-chapter').disabled = !window.lorekeeperLive;
+}
+
+function formatClock(seconds) {
+  return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+}
+
+function renderHunt(state) {
+  const game = state.game || {status:'IDLE'};
+  const chapter = state.chapter;
+  const hasGame = Boolean(game.id);
+  const active = game.status === 'ACTIVE';
+  const canStartLive = chapter?.status === 'RESOLVED' && !(game.chapter_id === chapter.id && game.mode === 'live') && !active;
+  $('#boss-status').textContent = active ? (game.mode === 'simulation' ? 'SYNTHETIC' : 'LIVE') : hasGame ? 'COMPLETE' : 'READY';
+  $('#boss-idle').classList.toggle('hide', hasGame);
+  $('#boss-live').classList.toggle('hide', !hasGame);
+  $('#start-boss').classList.toggle('hide', !canStartLive);
+  $('#start-boss').disabled = !window.lorekeeperLive;
+  $('#boss-replay').disabled = !chapter || chapter.status !== 'RESOLVED' || active;
+  if (!hasGame) {
+    $('#boss-idle strong').textContent = chapter?.status === 'RESOLVED' ? 'The Hunt is ready.' : 'Approve a memory to begin.';
+    $('#boss-idle span').textContent = chapter?.status === 'RESOLVED' ? 'Start the Hunt; chat then guesses with !guess WORD.' : 'Start with a memory, then hold a vote.';
+    return;
+  }
+  $('#boss-name').textContent = `${game.boss_name || 'Hunt'}${game.relic_name ? ` · ${game.relic_name}` : ''}`;
+  $('#boss-epithet').textContent = game.boss_epithet || '';
+  $('#boss-clock').textContent = active ? formatClock(game.seconds_left || 0) : 'Round complete';
+  $('#boss-clue').textContent = game.clue || '';
+  $('#boss-hint').textContent = game.status === 'RESOLVED' && game.target_word ? `Answer: ${game.target_word.toUpperCase()}` : game.hint ? `Hint ${game.hint_stage}: ${game.hint}` : 'A hint appears as the Hunt progresses.';
+  const heat = Number(game.best_heat || 0);
+  $('#boss-meters').textContent = game.best_guess ? `${heat}%${game.best_band ? ` · ${game.best_band.toLowerCase()}` : ''}` : 'Waiting for guesses';
+  $('#boss-hp').textContent = `${heat}% best heat`;
+  $('#boss-hp-bar').style.width = `${Math.max(0,Math.min(100,heat))}%`;
+  $('#boss-mode').textContent = `${game.embedding_mode === 'offline_curated' ? 'Offline practice' : 'Meaning score'} · ${game.unique_guesses || 0} guesses${game.mode === 'simulation' ? ' · synthetic activity' : ''}${game.guess_latency_p95_ms == null ? '' : ` · p95 ${game.guess_latency_p95_ms} ms`}`;
+  $('#boss-scoring-warning').textContent = game.scoring_error || '';
+  $('#boss-scoring-warning').classList.toggle('hide', !game.scoring_error);
+  $('#boss-input-notice').textContent = game.input_notice || '';
+  $('#boss-input-notice').classList.toggle('hide', !game.input_notice);
+  $('#boss-offline-vocab').classList.toggle('hide', !game.offline_words?.length);
+  $('#boss-offline-words').textContent = (game.offline_words || []).join(', ');
+  $('#boss-result').textContent = game.result || '';
+  $('#boss-result').classList.toggle('hide', !game.result);
+  $('#boss-closest-guesses').innerHTML = (game.closest_guesses || []).map(item => `<article class="guess-item"><b>#${Number(item.rank)||'—'} closest · ${esc(item.viewer)}</b><span>${esc(item.guess)} · ${Number(item.heat)||0}% heat</span></article>`).join('') || '<p class="muted-line">No guesses yet.</p>';
+  $('#boss-feed').innerHTML = (game.feed || []).map(item => `<article class="guess-item"><b>${esc(item.viewer)}</b><span>${esc(item.guess)} · ${Number(item.heat)||0}% heat · #${Number(item.rank)||'—'} closest</span></article>`).join('') || '<p class="muted-line">No guesses yet.</p>';
+  $('#boss-leaderboard').innerHTML = (game.round_leaderboard || []).slice(0,3).map(item => `<article class="contributor-row"><b>${esc(item.viewer)}</b><span>${item.best_heat}% heat · ${item.assists} assist${item.assists===1?'':'s'}${item.xp_awarded?` · +${item.xp_awarded} XP`:''}</span></article>`).join('');
+}
+
+function renderResult(state) {
+  const game = state.game || {};
+  const chapter = state.chapter || {};
+  $('#result-word').textContent = game.target_word ? game.target_word.toUpperCase() : 'Hunt complete';
+  $('#result-story').textContent = game.result || 'The Hunt is complete.';
+  $('#result-memory').textContent = readableMemory(chapter.seed_lore || '', 200);
+  const contributors = (game.round_leaderboard || []).slice(0,3);
+  $('#result-contributors').innerHTML = contributors.map((item,index) => `<article class="contributor-row"><b>${index+1}. ${esc(item.viewer)}${item.is_closest?' · closest':''}</b><span>${item.best_heat}% heat · ${item.assists} assist${item.assists===1?'':'s'} · ${item.xp_awarded ? `+${item.xp_awarded} XP` : `${item.xp_projected} XP`}</span></article>`).join('') || '<p class="muted-line">No scored guesses this Round.</p>';
+  $('#start-chapter').disabled = !window.lorekeeperLive;
+}
+
+function renderRoundHistory(rounds, relics) {
+  const entries = [];
+  const usedRelics = new Set();
+  for (const round of rounds || []) {
+    const charm = round.relic;
+    if (charm?.id) usedRelics.add(charm.id);
+    const votes = round.votes || {};
+    const voteCount = Number(votes.A||0)+Number(votes.B||0);
+    entries.push(`<article class="history-item"><div class="history-heading"><b>${esc(readableRoundTitle(round.title, round.ordinal))}</b><span>${voteCount} vote${voteCount===1?'':'s'}</span></div><p>${esc(readableMemory(round.seed_lore,180))}</p><p>${esc(truncateWords(round.result || 'Round result saved.',220))}</p>${charm ? `<div class="history-charm"><span aria-hidden="true">✦</span><div><b>${esc(charm.name)}</b><small>Charm</small></div></div>` : ''}</article>`);
+  }
+  for (const charm of relics || []) {
+    if (charm.id && usedRelics.has(charm.id)) continue;
+    entries.push(`<article class="history-item history-charm-only"><div class="history-charm"><span aria-hidden="true">✦</span><div><b>${esc(charm.name)}</b><small>Charm</small><p>${esc(readableMemory(charm.source_memory || charm.power_text || '',180))}</p></div></div></article>`);
+  }
+  $('#history-list').innerHTML = entries.join('');
+  $('#history-empty').classList.toggle('hide', entries.length > 0);
+  $('#relic-count').textContent = (relics || []).length;
+  $('#relic-empty').classList.add('hide');
+  $('#relic-grid').innerHTML = '';
+}
+
+function renderEngineering(state) {
+  $('#stat-events').textContent = state.stats?.received ?? 0;
+  $('#stat-lore').textContent = state.lore_counts?.active ?? (state.lore || []).filter(item => item.status === 'ACTIVE').length;
+  $('#stat-pending').textContent = state.pending ?? 0;
+  $('#stat-chapters').textContent = (state.chapter_history || []).filter(item => item.status === 'RESOLVED').length;
+  $('#pipeline-label').textContent = state.stats?.replay_running ? 'REPLAY' : state.twitch_eventsub ? 'LIVE' : 'READY';
+  $('#uptime').textContent = `${state.event_log === 'redpanda' ? 'Redpanda' : 'Local'} · ${state.stats?.uptime ?? 0}s`;
+  $('#event-log-label').textContent = state.event_log === 'redpanda' ? 'Redpanda' : 'Local';
   const pipeline = state.pipeline || {};
   $('#pipeline-eps').textContent = pipeline.events_per_second ?? 0;
   $('#pipeline-lag').textContent = pipeline.consumer_lag ?? 0;
-  $('#pipeline-p95').textContent = pipeline.projection_p95_ms == null ? 'Warming up' : pipeline.projection_p95_ms + ' ms';
+  $('#pipeline-p95').textContent = pipeline.projection_p95_ms == null ? '-' : `${pipeline.projection_p95_ms} ms`;
   const load = state.load_test || {};
-  const replayBusy = Boolean(state.stats.replay_running || load.running);
+  const replayBusy = Boolean(state.stats?.replay_running || load.running);
   ['#replay-raid','#replay-troll','#load-replay'].forEach(selector => { $(selector).disabled = replayBusy; });
-  $('#rehearsal-status').textContent = state.stats.replay_running ? 'Synthetic replay is running…'
-    : load.running ? 'Load test is running…'
-      : load.result ? `${load.result.events_sent} synthetic events · ${load.result.measured_events_per_second} events/sec · p95 ${load.result.append_or_process_latency_ms.p95} ms · ${load.result.all_events_projected ? 'fully projected' : 'projection still draining'}`
-        : load.error ? 'Load test failed: ' + load.error : 'Replay traffic is marked synthetic and cannot create lore.';
+  $('#rehearsal-status').textContent = state.stats?.replay_running ? 'Synthetic replay is running…'
+    : load.running ? 'Load run is running…'
+      : load.result ? `${load.result.events_sent} synthetic events · ${load.result.measured_events_per_second} events/sec · p95 ${load.result.append_or_process_latency_ms?.p95 ?? '-'} ms · ${load.result.all_events_projected ? 'fully processed' : 'still processing'}`
+        : load.error ? `Load run failed: ${load.error}` : 'Replay traffic is synthetic and cannot create memories.';
+  const events = state.events || [];
+  $('#event-empty').classList.toggle('hide', events.length > 0);
+  const icons = {'chat.message':'•','raid.incoming':'↗','follow':'＋','subscription':'♡','gift_sub':'♡','stream.online':'◉','privacy.forget':'⌑'};
+  $('#event-list').innerHTML = events.slice(0,7).map(event => `<article class="event-row"><span class="event-icon">${icons[event.type] || '·'}</span><span class="event-copy"><b>${esc(event.viewer || 'Viewer')}</b><small>${esc(event.type?.replace('.',' ') || 'event')}</small><span>${esc(event.text || '')}</span></span><time>${timeLabel(event.at)}</time></article>`).join('');
+}
+
+function render(state) {
+  latestState = state;
+  window.lorekeeperLive = Boolean(state.twitch_eventsub);
+  const memories = state.lore || [];
+  const step = currentStep(state);
+  setStep(step);
+  renderMemoryCards(memories);
+  renderMemoryStep(state);
+  renderVote(state);
+  renderHunt(state);
+  renderResult(state);
+  renderRoundHistory(state.chapter_history || [], state.relics || []);
+  renderEngineering(state);
+
   const connection = $('#connection');
-  const failed = state.twitch_subscriptions.filter(item => item.status !== 'enabled');
+  const failed = (state.twitch_subscriptions || []).filter(item => item.status !== 'enabled');
   const missingScopes = failed.some(item => String(item.status).startsWith('missing scope:'));
   connection.innerHTML = state.twitch_eventsub
-    ? '<i></i><span>Live · EventSub · ' + esc(state.twitch_login || 'channel') + '</span>'
+    ? `<i></i><span>Live · EventSub · ${esc(state.twitch_login || 'channel')}</span>`
     : state.twitch_authenticated
-      ? '<i style="background:#e2bd75"></i><span>' + (state.twitch_error ? 'EventSub needs attention' : 'EventSub connecting…') + '</span>'
-      : '<i></i><span>' + (state.twitch_error ? 'Twitch connection needs attention' : 'Twitch not connected') + '</span>';
+      ? `<i class="${state.twitch_error ? 'warning' : ''}"></i><span>${state.twitch_error ? 'EventSub needs attention' : 'EventSub connecting…'}</span>`
+      : `<i class="${state.twitch_error ? 'warning' : ''}"></i><span>${state.twitch_error ? 'Twitch needs attention' : 'Twitch not connected'}</span>`;
   connection.title = [state.twitch_error, ...failed.map(item => item.type + ': ' + item.status)].filter(Boolean).join('\n');
-  $('#channel-status').textContent = state.twitch_eventsub ? '@' + state.twitch_login : state.twitch_authenticated ? 'EventSub connecting' : 'Connect Twitch';
-  $('.channel strong').textContent = state.twitch_login || 'your channel';
+  $('#channel-status').textContent = state.twitch_eventsub ? 'Live' : state.twitch_authenticated ? 'Connecting' : 'Not connected';
+  $('.channel strong').textContent = state.twitch_login ? `@${state.twitch_login}` : 'your channel';
   $('#twitch-connect').classList.toggle('hide', state.twitch_authenticated && !missingScopes);
-  $('#connect-hero').classList.toggle('hide', state.twitch_authenticated);
   $('#twitch-retry').classList.toggle('hide', !state.twitch_authenticated || state.twitch_eventsub || !state.twitch_error);
   $('#twitch-disconnect').classList.toggle('hide', !state.twitch_authenticated);
-  $('#lore-empty').classList.toggle('hide', state.lore.length > 0);
-  $('#lore-list').innerHTML = state.lore.slice(0, 8).map(item => {
-    const narratorLabel = item.narrator_provider === 'lm_studio' ? 'LOCAL LM STUDIO' : item.narrator_provider === 'templates' ? 'TEMPLATE STORY' : '';
-    const actions = item.status === 'PENDING'
-      ? '<button class="approve" data-action="approve" data-id="' + esc(item.id) + '">Approve</button><button data-action="reject" data-id="' + esc(item.id) + '">Pass</button>'
-      : item.status === 'ACTIVE'
-        ? '<button data-action="retire" data-id="' + esc(item.id) + '">Retire</button>'
-        : '<button class="approve" data-action="restore" data-id="' + esc(item.id) + '">Restore for review</button><button data-action="delete" data-id="' + esc(item.id) + '">Delete</button>';
-    const statusLabel = item.status === 'PENDING' ? 'NEEDS YOUR OK' : item.status === 'ACTIVE' ? 'APPROVED' : item.status === 'REJECTED' ? 'PASSED' : 'RETIRED';
-    return '<article class="lore-card"><div class="lore-meta"><span>✳</span><span class="lore-kind">' + esc(item.kind.replace('_',' ')) + '</span><span>·</span><span>' + statusLabel + '</span>' + (narratorLabel ? '<span>·</span><span>' + narratorLabel + '</span>' : '') + '</div><div class="lore-summary">' + esc(item.summary) + '</div><div class="lore-bottom"><span class="lore-source">' + item.mentions + ' signal' + (item.mentions === 1 ? '' : 's') + '</span><div class="lore-actions">' + actions + '</div></div></article>';
-  }).join('');
-  const events = state.events.slice(0, 7);
-  $('#event-empty').classList.toggle('hide', events.length > 0);
-  const icons = {'chat.message':'◌','raid.incoming':'↗','follow':'✦','subscription':'♡','gift_sub':'♡','stream.online':'◉','privacy.forget':'⌑'};
-  $('#event-list').innerHTML = events.map(event =>
-    '<div class="event-row"><div class="event-icon">' + (icons[event.type] || '·') + '</div><div class="event-copy"><b>' + esc(event.viewer || 'Viewer') + ' <span>' + esc(event.type.replace('.',' ')) + '</span></b><span>' + esc(event.text || '') + '</span></div><div class="event-time">' + timeLabel(event.at) + '</div></div>'
-  ).join('');
-  const latest = state.utterances[0];
-  if (latest) $('#preview-line').textContent = latest.text;
-  const activeLoreCount = Number(state.lore_counts?.active ?? state.lore.filter(item => item.status === 'ACTIVE').length);
-  renderChapter(state.chapter, state.chapter_history || [], activeLoreCount);
-  renderBoss(state.game || {status:'IDLE'});
-  const game = state.game || {};
-  if (!game.id && state.chapter?.status === 'RESOLVED') {
-    $('#boss-idle strong').textContent = 'The field study is ready for its signal hunt.';
-    $('#boss-idle span').textContent = 'Start the lore boss encounter, then ask chat to find the hidden word with !guess WORD.';
-  }
-  $('#boss-replay').disabled = !state.chapter || state.chapter.status !== 'RESOLVED' || game.status === 'ACTIVE';
-  const liveRoundForChapter = Boolean(state.chapter && game.chapter_id === state.chapter.id && (game.mode === 'live' || game.live_completed_for_chapter));
-  const bossInProgress = game.status === 'ACTIVE';
-  const chapterCanAdvance = !state.chapter || (state.chapter.status === 'RESOLVED' && liveRoundForChapter && !bossInProgress && game.status === 'RESOLVED');
-  $('#start-chapter').disabled = !window.lorekeeperLive || !chapterCanAdvance || (!state.chapter && activeLoreCount === 0);
-  if (bossInProgress) $('#start-chapter').textContent = 'Investigation in progress';
-  else if (state.chapter?.status === 'RESOLVED' && !liveRoundForChapter) $('#start-chapter').textContent = 'Investigate the anomaly first';
-  else if (state.chapter?.status === 'RESOLVED' && game.status === 'RESOLVED') $('#start-chapter').textContent = 'Start the next field study';
-  else if (!state.chapter && activeLoreCount === 0) $('#start-chapter').textContent = 'Approve an observation first';
-  $('#start-boss').textContent = 'Start lore boss encounter';
-  $('#start-boss').classList.toggle('hide', !state.chapter || state.chapter.status !== 'RESOLVED' || bossInProgress || liveRoundForChapter);
-  renderRelics(state.relics || []);
-  const streamContext = state.stream_context || {};
-  $('#relic-stream-context').textContent = streamContext.category
-    ? 'Science-first style · Twitch category: ' + streamContext.category
-    : streamContext.source === 'title and tags'
-      ? 'Science-first style · uses your live Twitch stream details'
-      : 'Science-first style · local narrator personalizes from approved observations';
+  $('#connect-hero').classList.add('hide');
+  $('#mute-toggle').classList.toggle('on', Boolean(state.muted));
+  $('#mute-caption').textContent = state.muted ? 'ON' : 'OFF';
+  $('#mute-toggle').setAttribute('aria-pressed', String(Boolean(state.muted)));
+  $('#mute-toggle').setAttribute('aria-label', `Panic mute ${state.muted ? 'on' : 'off'}. Activate to ${state.muted ? 'unmute' : 'mute'} the overlay.`);
+
+  const activeMemoryCount = Number(state.lore_counts?.active ?? memories.filter(item => item.status === 'ACTIVE').length);
+  $('#start-vote').classList.toggle('hide', step !== 'memories');
+  $('#close-chapter').classList.toggle('hide', step !== 'vote');
+  $('#start-boss').classList.toggle('hide', step !== 'hunt' || state.chapter?.status !== 'RESOLVED' || state.game?.status === 'ACTIVE' || (state.game?.chapter_id === state.chapter?.id && state.game?.mode === 'live'));
+  $('#boss-replay').classList.toggle('hide', step !== 'hunt' || !state.chapter || state.chapter.status !== 'RESOLVED');
+  $('#start-chapter').classList.toggle('hide', step !== 'result');
+  $('#start-chapter').disabled = !window.lorekeeperLive || activeMemoryCount === 0;
+  $('#start-chapter').title = !window.lorekeeperLive ? 'Connect Twitch before starting the next Round.' : '';
+
+  const utterance = state.utterances?.[0];
+  if (utterance) $('#preview-line').textContent = utterance.text;
 }
-function renderBoss(game) {
-  const active = game.status === 'ACTIVE';
-  $('#boss-status').textContent = active ? (game.mode === 'simulation' ? 'SIMULATION' : 'LIVE') : game.status || 'WAITING';
-  $('#boss-idle').classList.toggle('hide', Boolean(game.id));
-  $('#boss-live').classList.toggle('hide', !game.id);
-  if (!game.id) return;
-  $('#boss-name').textContent = game.boss_name + ' · ' + game.relic_name;
-  $('#boss-epithet').textContent = game.boss_epithet;
-  $('#boss-clock').textContent = active ? `0:${String(game.seconds_left).padStart(2,'0')} SIGNAL HUNT` : 'ENCOUNTER CLOSED';
-  $('#boss-hp').textContent = `SIGNAL DISTANCE ${game.hp} / 100`;
-  $('#boss-hp-bar').style.width = `${Math.max(0,Math.min(100,game.hp*100/game.max_hp))}%`;
-  $('#boss-meters').textContent = game.best_guess ? `BEST HEAT ${game.best_band} · ${game.best_heat}% · “${game.best_guess}”` : 'NO SIGNALS FOUND YET';
-  $('#boss-mode').textContent = game.mode === 'simulation' ? 'SIMULATED CHAT · NOT LIVE TWITCH VIEWERS' : `${game.unique_guesses||0} guesses · one shared hunt`;
-  $('#boss-clue').textContent = game.clue || '';
-  $('#boss-hint').textContent = game.hint ? `HINT ${game.hint_stage}: ${game.hint}` : 'Hints unlock as the hunt continues.';
-  if (game.target_word) $('#boss-hint').textContent = `ANSWER: ${game.target_word.toUpperCase()}`;
-  $('#boss-result').textContent = game.result || '';
-  $('#boss-feed').innerHTML = (game.feed||[]).map(item => `<article class="history-item"><b>${esc(item.viewer)}</b><span>${esc(item.guess)} · ${esc(item.heat)}% ${esc(gameHeatBand(item.heat))}</span></article>`).join('');
-  $('#boss-leaderboard').innerHTML = game.mode === 'simulation' ? '' : (game.leaderboard||[]).map((item,index) => `<article class="history-item"><b>#${index+1} ${esc(item.display_name)} · ${esc(item.title)}</b><span>${item.xp} XP</span></article>`).join('');
-}
-function gameHeatBand(heat) { return heat >= 88 ? 'BLAZING' : heat >= 70 ? 'HOT' : heat >= 48 ? 'WARM' : heat >= 28 ? 'COOL' : 'COLD'; }
+
 async function refresh() {
   try { render(await (await fetch('/api/state', {cache:'no-store'})).json()); }
-  catch { $('#connection').innerHTML = '<i style="background:#cf8077"></i><span>Server reconnecting</span>'; }
+  catch {
+    $('#connection').innerHTML = '<i class="warning"></i><span>Reconnecting…</span>';
+  }
 }
 refresh();
 setInterval(refresh, 1500);
 const stream = new EventSource('/api/stream');
 stream.onmessage = () => refresh();
-document.querySelectorAll('.sidebar .nav-item[href^="#"]').forEach(link => link.addEventListener('click', event => {
-  const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
-  if (!target) return;
-  event.preventDefault();
-  history.replaceState(null, '', link.hash);
-  target.scrollIntoView({behavior:'smooth', block:'start'});
-  document.querySelectorAll('.sidebar .nav-item').forEach(item => item.classList.toggle('active', item === link));
-}));
-$('#start-chapter').addEventListener('click', async () => {
-  try { await api('/api/chapter/start'); await refresh(); toast('Field study opened. Chat can vote now.'); }
+
+async function startRound() {
+  try { await api('/api/chapter/start'); await refresh(); toast('Vote started.'); }
+  catch (error) { toast(error.message); }
+}
+$('#start-vote').addEventListener('click', startRound);
+$('#start-chapter').addEventListener('click', startRound);
+$('#close-chapter').addEventListener('click', async () => {
+  try { await api('/api/chapter/close'); await refresh(); toast('Vote closed.'); }
+  catch (error) { toast(error.message); }
+});
+$('#start-boss').addEventListener('click', async () => {
+  try { await api('/api/game/start', {chapter_id:window.currentChapterId}); await refresh(); toast('Hunt started. Chat can guess with !guess WORD.'); }
+  catch (error) { toast(error.message); }
+});
+$('#boss-replay').addEventListener('click', async () => {
+  try { await api('/api/game/replay'); await refresh(); toast('Synthetic Hunt preview started.'); }
+  catch (error) { toast(error.message); }
+});
+$('#mute-toggle').addEventListener('click', async () => {
+  try { await api('/api/settings/mute', {muted:!latestState?.muted}); await refresh(); }
   catch (error) { toast(error.message); }
 });
 $('#replay-raid').addEventListener('click', async () => {
@@ -274,41 +369,26 @@ $('#replay-raid').addEventListener('click', async () => {
   catch (error) { toast(error.message); }
 });
 $('#replay-troll').addEventListener('click', async () => {
-  try { await api('/api/replay', {profile:'troll'}); toast('Synthetic prompt-injection safety replay started.'); }
+  try { await api('/api/replay', {profile:'troll'}); toast('Safety replay started.'); }
   catch (error) { toast(error.message); }
 });
 $('#load-replay').addEventListener('click', async () => {
-  try { await api('/api/load-test', {events:1000,rate:100,profile:'raid'}); toast('1,000-event synthetic load test started.'); }
+  try { await api('/api/load-test', {events:1000,rate:100,profile:'raid'}); toast('1,000-event load started.'); }
   catch (error) { toast(error.message); }
 });
-$('#close-chapter').addEventListener('click', async () => {
-  try { await api('/api/chapter/close'); await refresh(); toast('The community finding is revealed.'); }
-  catch (error) { toast(error.message); }
-});
-$('#start-boss').addEventListener('click', async () => {
-  try { await api('/api/game/start', {chapter_id:window.currentChapterId}); await refresh(); toast('Signal hunt started. Ask chat to guess with !guess WORD.'); }
-  catch (error) { toast(error.message); }
-});
-$('#boss-replay').addEventListener('click', async () => {
-  try { await api('/api/game/replay'); toast('Starting clearly labelled 200-guess simulation.'); }
-  catch (error) { toast(error.message); }
-});
-$('#mute-toggle').addEventListener('click', async () => {
-  const muted = !$('#mute-toggle').classList.contains('on');
-  try { await api('/api/settings/mute', {muted}); await refresh(); toast(muted ? 'Mascot muted.' : 'Storyteller is ready.'); }
-  catch (error) { toast(error.message); }
-});
+
 document.addEventListener('click', async event => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   try {
     await api('/api/lore/action', {id:button.dataset.id, action:button.dataset.action});
     await refresh();
-    toast(button.dataset.action === 'approve' ? 'Memory approved for future chapters.' : 'Memory updated.');
+    toast(button.dataset.action === 'approve' ? 'Memory approved.' : button.dataset.action === 'reject' ? 'Memory skipped.' : 'Memory updated.');
   } catch (error) { toast(error.message); }
 });
+
 $('#forget-button').addEventListener('click', async () => {
-  const viewer = prompt('Delete a viewer memory. Enter the viewer’s Twitch user ID.');
+  const viewer = prompt('Enter the viewer’s Twitch user ID to delete their saved memory.');
   if (!viewer?.trim()) return;
   try { await api('/api/privacy/forget', {viewer_id:viewer.trim(), viewer:viewer.trim()}); await refresh(); toast('Viewer memory deleted.'); }
   catch (error) { toast(error.message); }
@@ -318,6 +398,6 @@ $('#twitch-disconnect').addEventListener('click', async () => {
   catch (error) { toast(error.message); }
 });
 $('#twitch-retry').addEventListener('click', async () => {
-  try { await api('/api/twitch/reconnect'); await refresh(); toast('Retrying Twitch EventSub.'); }
+  try { await api('/api/twitch/reconnect'); await refresh(); toast('Reconnecting to EventSub.'); }
   catch (error) { toast(error.message); }
 });

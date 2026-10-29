@@ -1,16 +1,22 @@
 # Lorekeeper
 
-Lorekeeper is a Twitch community story game. Streamer-approved observations become research charms and fictional lore bosses. Chat votes between investigations, then plays a cooperative semantic signal hunt: viewers send `!guess WORD`, see meaning-based heat feedback, and try to find the hidden word together. A local embedding model grades guesses; LM Studio can create lore-linked words and clues, with curated fallbacks when narration is unavailable.
+Lorekeeper pitch: **Chat hunts a hidden word drawn from its inside jokes, guided by meaning-based heat.** Streamer-approved observations seed the puzzle; a local embedding model scores guesses, and the answer reveals how it connects to the community memory.
 
 ## The live story loop
 
 1. A streamer approves a recurring community observation. LM Studio can paraphrase it and create a research charm, a lore-boss name, and an accessible ability. If generation fails, curated templates are used.
 2. The streamer opens a field study. Viewers vote with `!vote A` or `!vote B`: A deploys the charm and reveals hint one immediately; B preserves the sample and extends the hunt by 20 seconds while keeping hint one sealed initially.
-3. The lore boss opens a 90-second signal hunt. Chat guesses with `!guess WORD`. Local embeddings compare each guess to the hidden lore-linked target and show a shared heat score; the exact word solves the encounter. Guesses are rate limited per viewer, and the target stays private until the round resolves.
-4. The OBS overlay shows the lore boss, clue, timed hints, best heat, recent guesses, and countdown.
-5. At round end, participants earn persistent XP and titles. `!whatdoyouknow` reports a viewer's saved lore and game profile; `!forgetme` deletes both.
+3. The lore boss opens a 90-second signal hunt. Chat guesses with `!guess WORD`. Local embeddings compare each guess to the hidden lore-linked target and show shared heat; the exact word solves the encounter. Guesses are moderated and rate limited per viewer, and the target stays private until the round resolves.
+4. The OBS overlay shows the lore boss, clue, timed hints, best heat, the five closest guesses with rank, recent guesses, and countdown.
+5. At round end, participants earn persistent XP and titles. The closest guess earns a bonus; tied closest guesses share it, and guesses that improve the shared best score earn assist credit. `!whatdoyouknow` reports a viewer's saved lore and game profile; `!forgetme` deletes both.
 
-The default vote window is 45 seconds and the signal hunt is 90 seconds. Set `LOREKEEPER_CHAPTER_VOTE_SECONDS` to 15-180 seconds and `LOREKEEPER_SIGNAL_SECONDS` to 45-180 seconds. For semantic guessing, run an embedding model in LM Studio, set `EMBEDDING_PROVIDER=lm_studio`, set `EMBEDDING_MODEL` to its exact model ID, and set `EMBEDDING_DIMENSIONS=768` for the Nomic 768 model used in this setup. Guess scoring never falls back to feature hashing, because hashes do not represent meaning. Ordinary chat messages are not sent to a text-generation LLM; guesses go to the local embedding endpoint for scoring.
+The default vote window is 45 seconds and the signal hunt is 90 seconds. Set `LOREKEEPER_CHAPTER_VOTE_SECONDS` to 15-180 seconds and `LOREKEEPER_SIGNAL_SECONDS` to 45-180 seconds. For the real semantic game, run an embedding model in LM Studio, set `EMBEDDING_PROVIDER=lm_studio`, set `EMBEDDING_MODEL` to its exact model ID, and set `EMBEDDING_DIMENSIONS=768` for the Nomic 768 model used in this setup. Guess scoring does not fall back to feature hashing. Ordinary chat messages are not sent to a text-generation LLM; guesses go to the local embedding endpoint for scoring.
+
+On first startup, Lorekeeper embeds the bundled 5,000-word English noun/adjective reference list using the configured embedding model and caches the vectors under `data/` (Docker: `/app/data`). Each Hunt saves the target's sorted reference similarities and grades guesses by percentile rank, so unrelated words do not all appear nearly solved. Heat tiers are based on the top 1%, 5%, 15%, and 40%; exact spelling solves the Hunt. The dashboard and overlay show the five closest guesses as `#N closest`. To inspect a target and sample guesses against your live local model, run `python tools/heat_check.py comet sky orbit telescope` from the repository root.
+
+For a judge or rehearsal machine without LM Studio, set `EMBEDDING_PROVIDER=demo_lexicon`. This **offline practice mode** uses bundled, hand-curated concept vectors and a small listed vocabulary; it is not an open-vocabulary embedding model. The dashboard exposes the accepted word list during an encounter. The LLM narrator is optional in both modes.
+
+Guess display has a normalized built-in safety filter and word-only validation. Add channel-specific terms to `LOREKEEPER_GUESS_BLOCKLIST` as a comma-separated list and keep Twitch AutoMod/moderation enabled; no local blocklist can cover every slur, spelling variant, or language. Filtered terms are not embedded or shown in the overlay feed. Guess scoring p95 is shown during a round and exported as `lorekeeper_guess_embedding_latency_seconds`; under 1 second is a rehearsal target to measure, not a guaranteed result.
 
 ### Optional local LM Studio narrator
 

@@ -13,14 +13,16 @@ For the first rehearsal, use a simple, real story seed such as a comet appearing
 ## What you need open
 
 - Docker Desktop running.
-- LM Studio running with the embedding model loaded. Its server must be reachable from Docker at the configured LM Studio URL.
+- For open-vocabulary scoring: LM Studio running with the embedding model loaded and reachable from Docker. LM Studio is optional in offline practice mode.
 - Lorekeeper dashboard at <http://localhost:8787>.
 - OBS with the broadcaster account streaming to Twitch.
 - Twitch chat for the broadcaster's channel in two windows: broadcaster account and alt viewer account.
 - Lorekeeper overlay at <http://localhost:8787/overlay>, preferably added to OBS as a Browser Source.
 - Grafana at <http://localhost:3000> for the engineering portion of the rehearsal.
 
-Your `.env` should already contain `EMBEDDING_PROVIDER=lm_studio`, the exact embedding model ID from LM Studio, and `EMBEDDING_DIMENSIONS=768`. `LOREKEEPER_LLM_PROVIDER=lm_studio` enables LM Studio to write the hidden target and clue; with the narrator disabled, Lorekeeper uses its lore-word fallback. Guess scoring always needs the real embedding model.
+For a real semantic game, use `EMBEDDING_PROVIDER=lm_studio`, the exact loaded model ID, and `EMBEDDING_DIMENSIONS=768`. Keep LM Studio running and serving on the local network so Docker can reach it. `LOREKEEPER_LLM_PROVIDER=lm_studio` separately enables generated puzzle words, clues, hints, and the lore-linked answer reveal.
+
+For a no-model judge rehearsal, set `EMBEDDING_PROVIDER=demo_lexicon` and restart the app. The dashboard shows its small accepted word list. This mode uses curated concept vectors, not the open-vocabulary LM Studio model; Twitch chat/EventSub can still be real.
 
 ## Start the application
 
@@ -41,6 +43,27 @@ Leave this terminal running. Wait for the Lorekeeper container to be up, then op
 - Grafana: <http://localhost:3000>
 
 If the Docker executable is already on `PATH`, `docker compose up --build` is enough. Do not use `docker compose down -v` for routine restarts; `-v` removes persisted data.
+
+## Reset all application data (destructive)
+
+Use this only when you intentionally want a completely fresh Lorekeeper installation. It permanently deletes the PostgreSQL application database, saved Twitch authorization token, Lorekeeper local data, Redpanda event log, Redis data, Grafana data, and Prometheus metrics. Your source files and `.env` are kept. You will need to reconnect Twitch and create/approve lore again.
+
+In PowerShell, from the repository directory, stop the stack and delete its Compose volumes:
+
+```powershell
+Set-Location "C:\Users\aarya\OneDrive\Desktop\Lorekeeper"
+$dockerExe = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin\docker.exe"
+$env:Path = "$(Split-Path $dockerExe);$env:Path"
+& $dockerExe compose down --volumes
+```
+
+Then start the application again:
+
+```powershell
+& $dockerExe compose up --build
+```
+
+Do not run the reset command if you want to keep your stream history, approved observations, votes, relics, viewer profiles, or Twitch connection. A normal restart only needs `& $dockerExe compose up --build`.
 
 ## Part 1: verify the real Twitch connection
 
@@ -122,12 +145,18 @@ If broadcaster chat messages are not accepted on your setup, use the alt account
 
 Use the clue, hint, and heat to decide what to try next. The target is picked for the specific round, so these are useful seed-related guesses, not a guaranteed answer list. Avoid repeating the same guess from the same account: duplicate guesses are ignored. The semantic heat is a presentation score for closeness to this round's target, not a global rank across every English word.
 
+Guess rules: enter one English ASCII word from 2 to 24 letters. Multiword and non-English guesses are ignored. With the live embedding model, plurals and misspellings can still receive semantic heat, but only the exact hidden spelling solves the round. Offline practice accepts only the exact words shown in its curated list. If two viewers tie for closest, both receive closest-guess credit. Assist credit goes to guesses that set a new shared best.
+
+Check the displayed score p95 during play or the Prometheus histogram `lorekeeper_guess_embedding_latency_seconds`. Under 1 second is a goal to measure on this machine, not a guaranteed latency.
+
+To verify embedding failure recovery during a rehearsal, stop LM Studio while a live-model hunt is active and send one new `!guess WORD`. Within the configured two-second request timeout, the dashboard and overlay should show **Signal lost** and should not add the unscored guess to the feed. Start LM Studio again and send a new guess; a successful score should clear the warning. Do not use this disruption during the recording take.
+
 Expected behavior:
 
 - Each accepted guess appears in the dashboard/overlay feed with its viewer and heat band.
 - A better guess raises the displayed best heat and reduces the boss's signal-distance bar.
 - Hints unlock as time passes. With choice A, hint one is already visible at the start; later hints unlock during the round.
-- The exact target word resolves the encounter immediately. The overlay briefly reveals the result and answer.
+- The exact target word resolves the encounter immediately. The overlay briefly reveals the answer and explains how it connects to the approved memory. The closest guess and helpful best-score improvements receive extra XP, shown in the round leaderboard.
 - If nobody finds the exact word, let the clock expire. The app reveals the target and timeout result. This still verifies real chat ingestion, embedding scoring, hint timing, and timeout handling.
 
 For a more natural rehearsal, have the alt read the clue aloud and discuss guesses with the broadcaster instead of rapidly pasting the entire list. It makes the audience collaboration legible on the recording.
@@ -149,7 +178,18 @@ Only do this after the first live encounter has resolved.
 
 Choice B preserves the sample and awards a relic ward. The encounter starts without hint one and gives chat more time. This makes the choice visibly different from deploying the charm for an immediate hint.
 
-## Part 6: verify privacy after gameplay
+## Part 6: verify the guess safety filter
+
+Do this before recording, using a harmless test token rather than a real slur:
+
+1. Set `LOREKEEPER_GUESS_BLOCKLIST=filteredword` in `.env` and restart Lorekeeper.
+2. During a live test round, send `!guess filteredword` from the alt account.
+3. Confirm the term does not appear in the recent-guesses feed and the dashboard/overlay shows that a guess was filtered.
+4. Remove the temporary test token from `.env`, set your channel-specific prohibited terms, and restart before the real demo.
+
+Also leave Twitch AutoMod and your usual channel moderation enabled. The app filter is a configurable defense layer, not a promise to catch every slur, obfuscation, or language. Never test an actual slur in a public Twitch chat.
+
+## Part 7: verify privacy after gameplay
 
 Do this after both live encounter checks because forgetting the alt can remove lore contributed only by that account.
 
@@ -171,7 +211,7 @@ Do this after both live encounter checks because forgetting the alt can remove l
 
 The commands produce an overlay/dashboard response; they do not post a bot reply into Twitch chat.
 
-## Part 7: exercise the labelled synthetic preview
+## Part 8: exercise the labelled synthetic preview
 
 After a real live encounter resolves, click **Preview with 200 simulated guessers** in the dashboard. Watch the overlay and Grafana. The preview uses synthetic events and is explicitly labelled; do not present it as real viewer activity. Wait for the preview to resolve before starting another chapter.
 
@@ -198,6 +238,8 @@ $dockerExe = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin\docker.exe"
 & $dockerExe compose logs -f lorekeeper
 ```
 
+For a solo smoke test, the broadcaster and one alt are enough. Before recording, invite 3-5 real viewers so the clue discussion, vote, and assists read as a group game.
+
 ## Rehearsal plan before recording
 
 ### Rehearsal 1: prove the complete path
@@ -211,7 +253,7 @@ Run the real Twitch sequence again. Keep the observation short and clear, use on
 ### Rehearsal 3: record-ready check
 
 - Restart Lorekeeper with the startup command and confirm Twitch reconnects.
-- Confirm LM Studio is already warmed up and the embedding model is loaded.
+- If using open-vocabulary scoring, confirm LM Studio is warmed up and its embedding model is loaded. For offline practice, confirm the curated word list is visible instead.
 - Confirm the approved story seed is present; avoid seeding during the final take if it costs time.
 - Check OBS source sizing, dashboard zoom, Twitch chat readability, and Grafana layout.
 - Keep the real Twitch segment separate from the synthetic preview in the edit.

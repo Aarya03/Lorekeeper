@@ -63,6 +63,9 @@ embedding_requests=Counter("lorekeeper_embedding_requests_total","Lore candidate
 
 embedding_fallbacks=Counter("lorekeeper_embedding_fallbacks_total","Embedding calls that fell back to deterministic feature hashing")
 
+guess_embedding_latency=Histogram("lorekeeper_guess_embedding_latency_seconds","Time from Twitch guess acceptance to semantic heat result",buckets=(.05,.1,.2,.35,.5,.75,1,1.5,2,3,5,10))
+guess_moderation_rejections=Counter("lorekeeper_guess_moderation_rejections_total","Chat guesses rejected by word safety checks")
+
 redis_client=None
 
 

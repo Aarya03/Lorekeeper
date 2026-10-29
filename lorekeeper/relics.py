@@ -351,16 +351,16 @@ def for_chapter(c, chapter_id: str):
 def vote_choices(relic):
     """Return clue-hunt vote actions with visible, distinct encounter consequences."""
     if not relic:
-        return (("DEPLOY THE CHARM", "Reveal the first hint as the hunt opens; the charm gains extra resonance."),
-                ("PRESERVE THE SAMPLE", "Keep the first hint sealed, add 20 seconds to the hunt, and gain 1 ward."))
+        return (("DEPLOY THE CHARM", "Reveal hint 1 now; the charm gains extra resonance."),
+                ("PRESERVE THE SAMPLE", "Keep hint 1 hidden; add 20 seconds and gain 1 ward."))
     if int(relic["charge"]) > 0:
-        use = ("DEPLOY THE CHARM", "Reveal the first hint immediately; spend 1 stored charge for extra charm resonance.")
+        use = ("DEPLOY THE CHARM", "Reveal hint 1 now; spend 1 charge for extra resonance.")
     else:
-        use = ("FOCUS THE CLUE", "Reveal the first hint immediately; the charm still gains resonance.")
+        use = ("DEPLOY THE CHARM", "Reveal hint 1 now; the charm still gains resonance.")
     if int(relic["wards"]) < 9:
-        detail = "Keep the first hint sealed at the start, add 20 seconds to the hunt, and gain 1 ward."
+        detail = "Keep hint 1 hidden; add 20 seconds and gain 1 ward."
     else:
-        detail = "Keep the first hint sealed at the start and add 20 seconds; this charm already has 9 wards."
+        detail = "Keep hint 1 hidden and add 20 seconds; this charm already has 9 wards."
     protect = ("PRESERVE THE SAMPLE", detail)
     return use, protect
 

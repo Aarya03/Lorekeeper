@@ -4,7 +4,13 @@ from . import runtime
 from .runtime import db, lock, now, publish, stats
 from .projection import emit_event, speech_allowed, store_overlay_command
 
-CAST=[("pixel_pete","remember when chat took the unexpected route?"),("luna_lags","that surprise ending was unforgettable"),("byte_bard","every time we reach the final round, something changes"),("mossy_mage","our community made that moment legendary"),("pixel_pete","!lore"),("starrykai","this community is the best part of stream"),("luna_lags","never forget the unexpected comeback")]
+CAST=[("chat.message","pixel_pete","remember when chat took the unexpected route?"),
+      ("chat.message","luna_lags","that surprise ending was unforgettable"),
+      ("chat.message","byte_bard","every time we reach the final round, something changes"),
+      ("chat.message","mossy_mage","our community made that moment legendary"),
+      ("chat.message","pixel_pete","!lore"),
+      ("chat.message","starrykai","this community is the best part of stream"),
+      ("chat.message","luna_lags","never forget the unexpected comeback")]
 
 PROFILES={
  "first_stream":[("stream.online","Lorekeeper","The archive is open. Welcome back, everyone.")]+CAST[:4]+[("follow","new_follower","I just found this cozy corner of Twitch!")]+CAST[4:],
