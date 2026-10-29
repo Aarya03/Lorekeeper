@@ -110,14 +110,17 @@ def _dispatch_game_action(event):
         apply_guess(event)
 
 def learn_lore(c, viewer_id, viewer, text, event_id):
-    clean = text.strip().lower()
+    # Accept the common one-letter omission in "remember" so a mistyped
+    # recurrence cue does not silently prevent an otherwise useful Memory.
+    corrected = re.sub(r"\bremeber\b", "remember", str(text), flags=re.I)
+    clean = corrected.strip().lower()
     if len(clean) < 14 or clean.startswith("!"): return
     if len(clean)>280 or re.search(r"(?:[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b\d{3}[- .]?\d{3}[- .]?\d{4}\b|\b(?:my address|i live at|my real name|my phone|diagnosed|medical condition|social security|password is)\b)",clean,re.I): return
     # Generic recurrence cues work across stream categories and do not assume
     # any particular game, creator, meme, or community.
     signals = ("remember when", "remember that", "again", "every time", "always", "these days", "lately", "keeps coming up", "never forget", "back to")
     if not any(word in clean for word in signals): return
-    summary = summarize_lore(text)
+    summary = summarize_lore(corrected)
     old = c.execute("SELECT * FROM lore WHERE lower(summary)=lower(?) AND status!='REJECTED'", (summary,)).fetchone()
     if old:
         evidence = json.loads(old["evidence"]); evidence.append(event_id)
