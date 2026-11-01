@@ -88,46 +88,46 @@ For a detailed real-Twitch test and rehearsal sequence, see [docs/live_twitch_te
 
 ```mermaid
 flowchart LR
-  subgraph People[People and stream]
-    Viewer[Viewers]
-    Chat[Twitch chat]
-    Streamer[Streamer]
-    Dashboard[Streamer dashboard]
-    OBS[OBS browser overlay]
+  subgraph People [People and stream]
+    Viewer["Viewers"]
+    Chat["Twitch chat"]
+    Streamer["Streamer"]
+    Dashboard["Streamer dashboard"]
+    OBS["OBS browser overlay"]
   end
 
-  subgraph Twitch[Twitch]
-    OAuth[Twitch OAuth]
-    EventSub[EventSub WebSocket]
+  subgraph Twitch [Twitch]
+    OAuth["Twitch OAuth"]
+    EventSub["EventSub WebSocket"]
   end
 
-  subgraph App[Lorekeeper application]
-    Ingress[Twitch adapter]
-    HTTP[Dashboard and HTTP API]
-    Projection[Event projection and safety filters]
-    Story[Memory and chapter service]
-    Relics[Relic service]
-    Hunt[Signal Hunt, scoring, and viewer XP]
-    Narrator[Local narrator with template fallback]
-    SSE[Server-sent updates]
+  subgraph App [Lorekeeper application]
+    Ingress["Twitch adapter"]
+    HTTP["Dashboard and HTTP API"]
+    Projection["Event projection and safety filters"]
+    Story["Memory and chapter service"]
+    Relics["Relic service"]
+    Hunt["Signal Hunt, scoring, and viewer XP"]
+    Narrator["Local narrator with template fallback"]
+    SSE["Server-sent updates"]
   end
 
-  subgraph Data[Data and event services]
-    Raw[(Redpanda events.raw)]
-    Actions[(Redpanda game.actions)]
-    DLQ[(Redpanda dead-letter topic)]
-    PG[(PostgreSQL and pgvector)]
-    Redis[(Redis rate limits)]
+  subgraph Data [Data and event services]
+    Raw["Redpanda: events.raw"]
+    Actions["Redpanda: game.actions"]
+    DLQ["Redpanda: dead-letter topic"]
+    PG["PostgreSQL and pgvector"]
+    Redis["Redis rate limits"]
   end
 
-  subgraph LocalAI[Optional local LM Studio]
-    LLM[Text generation]
-    Embed[Embedding model]
+  subgraph LocalAI [Optional local LM Studio]
+    LLM["Text generation"]
+    Embed["Embedding model"]
   end
 
-  subgraph Observe[Observability]
-    Metrics[Prometheus]
-    Grafana[Grafana]
+  subgraph Observe [Observability]
+    Metrics["Prometheus"]
+    Grafana["Grafana"]
   end
 
   Viewer --> Chat
@@ -139,14 +139,16 @@ flowchart LR
   Raw --> Projection
   Projection --> PG
   Projection --> Story
-  Projection -->|!guess actions| Actions --> Hunt
+  Projection -->|guess events| Actions --> Hunt
   Story --> Relics
   Story --> Narrator
   Relics --> PG
   Story --> PG
   Hunt --> PG
-  Hunt <-->|target and guess vectors| Embed
-  Narrator <-->|approved Memory and story copy| LLM
+  Hunt -->|"target and guess vectors"| Embed
+  Embed -->|"target and guess vectors"| Hunt
+  Narrator -->|"approved Memory and story copy"| LLM
+  LLM -->|"generated story content"| Narrator
   HTTP --> Story
   HTTP --> Relics
   HTTP --> PG
@@ -156,7 +158,7 @@ flowchart LR
   Hunt --> SSE
   SSE --> Dashboard
   SSE --> OBS
-  HTTP -->|/metrics| Metrics --> Grafana
+  HTTP -->|metrics| Metrics --> Grafana
   Projection -. failed records .-> DLQ
 ```
 
