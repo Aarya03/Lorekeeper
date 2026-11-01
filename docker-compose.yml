@@ -37,6 +37,8 @@ services:
       DATABASE_URL: postgresql://lorekeeper:${PG_PASSWORD:-lorekeeper-local}@postgres:5432/lorekeeper
       LOREKEEPER_HOST: 0.0.0.0
       PORT: 8787
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8787:8787"
     volumes:

@@ -37,7 +37,38 @@ Leave the model blank to use the model loaded in LM Studio. For Lorekeeper runni
 
 In the [Twitch Developer Console](https://dev.twitch.tv/console/apps), create an application and set its redirect URL to the value in `TWITCH_REDIRECT_URI`. This project defaults to `http://localhost:8787/auth/callback`. If Twitch requires HTTPS for your app, use an HTTPS tunnel and set the same tunnel callback in both Twitch and `.env`. EventSub uses an outbound WebSocket connection, so no public webhook is needed.
 
-### Environment and services
+### Linux and macOS setup
+
+The application is containerized, so the same Compose stack runs on Linux and macOS; the Python services and source code do not depend on Windows APIs. Install [Docker Engine and Compose on Linux](https://docs.docker.com/engine/install/) or [Docker Desktop on macOS](https://docs.docker.com/desktop/setup/install/mac-install/), and make sure Docker is running. On Linux, your account also needs permission to use Docker. The commands below use a POSIX shell from the repository directory.
+
+```sh
+cp .env.example .env
+```
+
+Edit `.env` and set `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`. Python 3 and `venv` are only needed on the host to generate the token-encryption key; the application itself runs in Docker. Create a small virtual environment and install the key-generation dependency:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install cryptography
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+```
+
+Copy the printed value into `TOKEN_ENCRYPTION_KEY` in `.env`. Set `EMBEDDING_PROVIDER=lm_studio`, `EMBEDDING_MODEL` to the exact model ID loaded in LM Studio, and `EMBEDDING_DIMENSIONS=768` for the Nomic 768 model. To use Lorekeeper without a local model, keep the example's `EMBEDDING_PROVIDER=demo_lexicon`; that is limited practice mode, not open-vocabulary semantic scoring. Set `LOREKEEPER_LLM_PROVIDER=lm_studio` only if you also want generated story text.
+
+Start the stack:
+
+```sh
+docker compose up --build
+```
+
+Open <http://localhost:8787> for the dashboard, <http://localhost:8787/overlay> for OBS, and <http://localhost:3000> for Grafana. Stop the foreground stack with `Ctrl+C`; start it again with the same Compose command. Persistent Docker volumes keep application data across restarts.
+
+For LM Studio on macOS, enable its local server and set the `.env` URL to `http://host.docker.internal:1234/v1`. On Linux, the Compose service maps `host.docker.internal` to the host gateway; enable **Serve on Local Network** in LM Studio and use the same URL. The model server must be listening on the host interface reachable from Docker.
+
+The included Docker images and Python dependencies are intended for Linux and macOS hosts. The source uses cross-platform Python APIs and the Dockerfile runs in a Linux container. This compatibility review is based on the repository configuration; this workspace has not been used to execute the stack on a Linux or macOS machine.
+
+### Windows setup
 
 In PowerShell, from the repository directory:
 
