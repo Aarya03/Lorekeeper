@@ -1,9 +1,9 @@
 from __future__ import annotations
-import asyncio, json, os, random, threading, time, urllib.error, urllib.parse, urllib.request
+import asyncio, json, os, queue, random, threading, time, urllib.error, urllib.parse, urllib.request
 from . import runtime
 from .projection import emit_event
 
-twitch_status={"connected":False,"eventsub":False,"channel":"","login":"","error":"","subscriptions":[]}
+twitch_status={"connected":False,"eventsub":False,"channel":"","login":"","error":"","subscriptions":[],"whisper_status":"Waiting for Twitch authorization."}
 
 auth_states: dict[str,float] = {}
 
@@ -15,7 +15,13 @@ twitch_thread=None
 
 twitch_tokens=None
 
-TWITCH_SCOPES=["user:read:chat","moderator:read:followers","channel:read:subscriptions","channel:read:redemptions","bits:read"]
+TWITCH_SCOPES=["user:read:chat","user:manage:whispers","moderator:read:followers","channel:read:subscriptions","channel:read:redemptions","bits:read"]
+
+_whisper_queue=queue.Queue(maxsize=256)
+_whisper_worker_lock=threading.Lock()
+_whisper_worker_thread=None
+_whisper_request_lock=threading.Lock()
+_whisper_last_request={}
 
 def client_id(): return os.environ.get("TWITCH_CLIENT_ID","").strip()
 
@@ -61,10 +67,88 @@ def helix_request(path, token, method="GET", body=None):
     payload=json.dumps(body).encode() if body is not None else None
     request=urllib.request.Request("https://api.twitch.tv/helix/"+path,data=payload,headers={"Client-Id":client_id(),"Authorization":"Bearer "+token,"Content-Type":"application/json"},method=method)
     try:
-        with urllib.request.urlopen(request,timeout=12) as response: return json.loads(response.read() or b"{}")
+        with urllib.request.urlopen(request,timeout=12) as response:
+            payload=response.read()
+            return json.loads(payload) if payload else {}
     except urllib.error.HTTPError as exc:
         detail=exc.read().decode("utf-8","replace")[:500]
         raise RuntimeError(f"Twitch API {exc.code}: {detail}") from exc
+
+def _whisper_worker():
+    """Send personal profile replies off the EventSub and projection threads."""
+    from datetime import datetime, timezone
+    last_send=0.0
+    while True:
+        viewer_id,message=_whisper_queue.get()
+        try:
+            with token_lock: tokens=dict(twitch_tokens or {})
+            scopes=set(tokens.get("scope",[]))
+            if "user:manage:whispers" not in scopes:
+                twitch_status["whisper_status"]="Reconnect Twitch and grant user:manage:whispers to enable private replies."
+                continue
+            if not str(viewer_id).isdigit():
+                twitch_status["whisper_status"]="Private reply skipped: Twitch viewer ID is unavailable."
+                continue
+            utc_day=datetime.now(timezone.utc).date().isoformat()
+            with runtime.db() as c:
+                already=c.execute("SELECT 1 FROM whisper_recipients WHERE utc_day=? AND viewer_id=?",(utc_day,str(viewer_id))).fetchone()
+                unique_today=c.execute("SELECT count(*) n FROM whisper_recipients WHERE utc_day=?",(utc_day,)).fetchone()["n"]
+            if not already and unique_today>=40:
+                twitch_status["whisper_status"]="Daily Twitch Whisper limit reached (40 unique viewers)."
+                continue
+            delay=0.4-(time.monotonic()-last_send)
+            if delay>0: time.sleep(delay)
+            token=current_token()
+            query=urllib.parse.urlencode({"from_user_id":tokens["user_id"],"to_user_id":str(viewer_id)})
+            helix_request("whispers?"+query,token,"POST",{"message":" ".join(str(message).split())[:450]})
+            sent_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z")
+            with runtime.db() as c:
+                c.execute("INSERT INTO whisper_recipients(utc_day,viewer_id,sent_at) VALUES(?,?,?) ON CONFLICT(utc_day,viewer_id) DO UPDATE SET sent_at=excluded.sent_at",
+                          (utc_day,str(viewer_id),sent_at))
+            last_send=time.monotonic()
+            twitch_status["whisper_status"]="Private response accepted by Twitch. Delivery may depend on the viewer's Whisper settings."
+        except Exception as exc:
+            twitch_status["whisper_status"]=f"Private reply failed: {str(exc)[:220]}"
+            print(f"Twitch Whisper delivery failed: {str(exc)[:220]}",flush=True)
+        finally:
+            _whisper_queue.task_done()
+
+def _start_whisper_worker():
+    global _whisper_worker_thread
+    with _whisper_worker_lock:
+        if _whisper_worker_thread and _whisper_worker_thread.is_alive(): return
+        _whisper_worker_thread=threading.Thread(target=_whisper_worker,daemon=True,name="twitch-whisper-sender")
+        _whisper_worker_thread.start()
+
+def enqueue_whisper(viewer_id,message,force=False):
+    """Queue a rate-limited private message without blocking chat ingestion."""
+    global _whisper_last_request
+    with token_lock: tokens=dict(twitch_tokens or {})
+    if not tokens:
+        twitch_status["whisper_status"]="Connect Twitch to enable private viewer replies."
+        return False
+    if "user:manage:whispers" not in set(tokens.get("scope",[])):
+        twitch_status["whisper_status"]="Reconnect Twitch and grant user:manage:whispers to enable private replies."
+        return False
+    viewer_id=str(viewer_id or "")
+    if not viewer_id.isdigit(): return False
+    now_monotonic=time.monotonic()
+    with _whisper_request_lock:
+        previous=_whisper_last_request.get(viewer_id,0.0)
+        if not force and now_monotonic-previous<15:
+            twitch_status["whisper_status"]="Private reply rate limited; wait a few seconds and try again."
+            return False
+        _whisper_last_request[viewer_id]=now_monotonic
+        if len(_whisper_last_request)>2000:
+            _whisper_last_request={key:value for key,value in _whisper_last_request.items() if now_monotonic-value<3600}
+    try:
+        _whisper_queue.put_nowait((viewer_id,str(message)))
+    except queue.Full:
+        twitch_status["whisper_status"]="Private reply queue is busy; try again shortly."
+        return False
+    _start_whisper_worker()
+    twitch_status["whisper_status"]="Private reply queued for Twitch."
+    return True
 
 def current_token():
     global twitch_tokens
@@ -111,6 +195,8 @@ def subscribe_eventsub(access,session_id,broadcaster_id,scopes):
         except Exception as exc:
             registered.append({"type":event_type,"status":str(exc)[:160]})
             print(f"EventSub subscription {event_type} failed: {exc}",flush=True)
+    if "user:manage:whispers" not in scopes:
+        registered.append({"type":"private viewer replies","status":"missing scope: user:manage:whispers"})
     twitch_status["subscriptions"]=registered
 
 def eventsub_event(message):
@@ -143,15 +229,20 @@ def eventsub_event(message):
         event_text="Viewer requested memory deletion"
         emit_event(event_type,viewer,event_text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":event_text,"twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
         forget_viewer(viewer_id,viewer,ack=True)
+    elif event_type=="chat.message" and (text.strip().lower()=="!rememberme" or text.strip().lower().startswith("!rememberme ")):
+        from .controls import remember_viewer
+        event_text="Viewer opted back in to memory"
+        emit_event(event_type,viewer,event_text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":event_text,"twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
+        remember_viewer(viewer_id,viewer)
     elif event_type=="chat.message" and text.lower().startswith("!whatdoyouknow"):
         with runtime.db() as c: forgotten=c.execute("SELECT 1 FROM forgotten WHERE viewer_id=?",(str(viewer_id),)).fetchone() is not None
-        emit_event(event_type,viewer,"Viewer requested a memory status check",source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":"Viewer requested a memory status check","twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
+        # Preserve the command for projection, where the private profile reply is
+        # assembled. Forgotten viewers are redacted there and receive a generic
+        # private response below.
+        emit_event(event_type,viewer,text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":text,"twitch_event_type":kind},event_id="twitch:eventsub:"+event_id)
         if forgotten:
-            # Show explicit deletion confirmation without storing the viewer name or creating new memory.
-            from .runtime import publish, now
-            with runtime.db() as c: muted=c.execute("SELECT value FROM settings WHERE key='muted'").fetchone()["value"]=="true"
-            if not muted:
-                publish({"kind":"reaction","reaction":{"id":"privacy-check:"+event_id,"text":"I don't have any saved memories for you.","trigger":"privacy","viewer":"Lorekeeper","at":now(),"animation":"talk"}})
+            # Do not put personal account status on the shared stream overlay.
+            enqueue_whisper(viewer_id,"You don't have any saved memories or profile stats in Lorekeeper.")
     else:
         emit_event(event_type,viewer,text,source="twitch_eventsub",mode="live",viewer_id=viewer_id,payload={"display_name":viewer,"text":text,"twitch_event_type":kind,"broadcaster_user_id":raw.get("broadcaster_user_id"),"stream_id":raw.get("id") if event_type=="stream.online" else None},event_id="twitch:eventsub:"+event_id)
 
@@ -191,6 +282,8 @@ async def eventsub_connection(url,stop,reconnecting=False):
                     with token_lock: authorized=dict(twitch_tokens or {})
                     twitch_status["channel"]=authorized.get("login",""); twitch_status["login"]=authorized.get("login","")
                     scopes=set(authorized.get("scope",[]))
+                    twitch_status["whisper_status"]=("Private viewer replies enabled." if "user:manage:whispers" in scopes
+                                                      else "Reconnect Twitch and grant user:manage:whispers to enable private replies.")
                     await asyncio.to_thread(sync_stream_context,token,authorized["user_id"])
                     await asyncio.to_thread(subscribe_eventsub,token,session,authorized["user_id"],scopes)
                 reconnecting=False

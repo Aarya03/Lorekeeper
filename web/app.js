@@ -300,13 +300,15 @@ function render(state) {
 
   const connection = $('#connection');
   const failed = (state.twitch_subscriptions || []).filter(item => item.status !== 'enabled');
-  const missingScopes = failed.some(item => String(item.status).startsWith('missing scope:'));
+  const missingScopes = failed.some(item => String(item.status).startsWith('missing scope:'))
+    || (state.twitch_authenticated && !state.twitch_whisper_enabled);
   connection.innerHTML = state.twitch_eventsub
     ? `<i></i><span>Live · EventSub · ${esc(state.twitch_login || 'channel')}</span>`
     : state.twitch_authenticated
       ? `<i class="${state.twitch_error ? 'warning' : ''}"></i><span>${state.twitch_error ? 'EventSub needs attention' : 'EventSub connecting…'}</span>`
       : `<i class="${state.twitch_error ? 'warning' : ''}"></i><span>${state.twitch_error ? 'Twitch needs attention' : 'Twitch not connected'}</span>`;
-  connection.title = [state.twitch_error, ...failed.map(item => item.type + ': ' + item.status)].filter(Boolean).join('\n');
+  connection.title = [state.twitch_error, state.twitch_whisper_status,
+    ...failed.map(item => item.type + ': ' + item.status)].filter(Boolean).join('\n');
   $('#channel-status').textContent = state.twitch_eventsub ? 'Live' : state.twitch_authenticated ? 'Connecting' : 'Not connected';
   $('.channel strong').textContent = state.twitch_login ? `@${state.twitch_login}` : 'your channel';
   $('#twitch-connect').classList.toggle('hide', state.twitch_authenticated && !missingScopes);

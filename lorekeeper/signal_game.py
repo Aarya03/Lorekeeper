@@ -120,6 +120,8 @@ def start(chapter_id=None, mode="live"):
         with lock, db() as c:
             from .game import state as legacy_game_state
             legacy_game_state(c)
+            from .story import cancel_missing_memory_chapters
+            cancel_missing_memory_chapters(c)
             active = c.execute("SELECT id FROM signal_rounds WHERE status='ACTIVE' LIMIT 1").fetchone()
             if active:
                 return None, "A lore boss signal hunt is already active."
@@ -132,7 +134,7 @@ def start(chapter_id=None, mode="live"):
             if existing:
                 return None, "This chapter already had its signal hunt. Open the next field study to continue."
             lore_id = chapter["seed_lore_id"]
-            lore = c.execute("SELECT summary,status FROM lore WHERE id=?", (lore_id,)).fetchone() if lore_id else None
+            lore = c.execute("SELECT summary,status,evidence FROM lore WHERE id=?", (lore_id,)).fetchone() if lore_id else None
             if not lore or lore["status"] != "ACTIVE":
                 return None, "The source observation must be approved before a lore boss can be created."
             enrichment = c.execute("SELECT boss_name,boss_epithet FROM lore_enrichments WHERE lore_id=?", (lore_id,)).fetchone()
@@ -143,9 +145,28 @@ def start(chapter_id=None, mode="live"):
             boss = enrichment["boss_name"] if enrichment else "The Unresolved Hypothesis"
             epithet = enrichment["boss_epithet"] if enrichment else "A fictional anomaly shaped by approved community lore"
             summary = lore["summary"]
+            previous_answers=[item["target_word"] for item in c.execute(
+                "SELECT target_word FROM signal_rounds WHERE lore_id=? ORDER BY started_at",
+                (str(lore_id),)).fetchall()]
+            source_texts = []
+            try:
+                evidence_value = lore["evidence"] or []
+                evidence_ids = evidence_value if isinstance(evidence_value, list) else json.loads(evidence_value)
+                if evidence_ids:
+                    source_rows = c.execute(
+                        "SELECT payload FROM events WHERE id IN (%s)" % ",".join("?" for _ in evidence_ids[:8]),
+                        tuple(evidence_ids[:8])).fetchall()
+                    for source_row in source_rows:
+                        payload_value = source_row["payload"] or "{}"
+                        payload = payload_value if isinstance(payload_value, dict) else json.loads(payload_value)
+                        message = payload.get("text", "")
+                        if message:
+                            source_texts.append(message)
+            except (TypeError, ValueError, KeyError):
+                source_texts = []
             relic_name = relic["name"] if relic else "Community Signal Charm"
         try:
-            puzzle = narrator.signal_puzzle(summary, relic_name, boss, context)
+            puzzle = narrator.signal_puzzle(summary, relic_name, boss, context, source_texts, previous_answers)
         except Exception as exc:
             return None, f"The Keeper could not prepare a safe puzzle answer: {str(exc)[:160]}"
         try:

@@ -67,7 +67,7 @@ Do not run the reset command if you want to keep your stream history, approved o
 
 ## Part 1: verify the real Twitch connection
 
-1. In the dashboard, click **Connect Twitch** if the broadcaster account is not already connected. Complete OAuth as the broadcaster.
+1. In the dashboard, click **Connect Twitch** if needed. Complete OAuth as the broadcaster and grant the requested `user:manage:whispers` permission. If already connected without it, use **Connect Twitch** to reauthorize.
 2. Confirm the dashboard shows **Live - EventSub** and the correct channel name.
 3. Start the stream in OBS. Use an actual Twitch stream for this test; opening chat while the channel is offline does not prove the live demo path.
 4. Open the channel's Twitch chat in one window as the broadcaster and a second window/private browser as the alt. Join the same channel in both.
@@ -199,17 +199,24 @@ Do this after both live encounter checks because forgetting the alt can remove l
    !whatdoyouknow
    ```
 
-2. Check the overlay/dashboard response for the alt's saved lore or profile summary.
+2. Check the alt account's Twitch Whispers inbox for its private saved-lore/profile summary. It should not appear in stream chat or the shared overlay.
 3. Then send:
 
    ```text
    !forgetme
    ```
 
-4. Confirm the acknowledgement appears and the viewer's saved profile/derived lore is removed or anonymized according to whether other viewers also contributed to that lore.
-5. Send `!whatdoyouknow` again and confirm the response reports no saved memory for the forgotten viewer.
+4. Check the alt's Twitch Whispers inbox for the deletion confirmation. Confirm the viewer's saved profile/derived lore is removed or anonymized according to whether other viewers also contributed to that lore. A Round seeded only by this Memory should be scrubbed and cancelled, not left blocking a later Hunt.
+5. Send `!whatdoyouknow` again and check the alt's Whispers inbox for the empty-memory response. While the account remains opted out, ordinary messages must not create new Memories.
+6. To continue testing memory creation with this account, explicitly opt back in:
 
-The commands produce an overlay/dashboard response; they do not post a bot reply into Twitch chat.
+   ```text
+   !rememberme
+   ```
+
+   Check the alt's Whispers inbox for the opt-in confirmation, then send a fresh eligible callback message and confirm it appears as pending for streamer approval.
+
+The privacy commands respond by private Twitch Whisper and keep personal information off the shared overlay and public chat. Twitch OAuth must include `user:manage:whispers`, the broadcaster account needs a verified phone number, and the viewer must allow Whispers from the sender. Check the viewer's Twitch Whispers inbox; Twitch can silently filter a Whisper even when its API accepts it.
 
 ## Part 8: exercise the labelled synthetic preview
 

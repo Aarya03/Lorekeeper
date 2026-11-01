@@ -69,10 +69,20 @@ def embed(word: str, dimensions: int | None = None) -> list[float]:
 
 
 def choose_target(summary: str, blocked: set[str] | None = None) -> str:
-    tokens = re.findall(r"[a-z]+", str(summary).casefold())
-    blocked = blocked or set()
-    matches = [word for word in tokens if word in WORD_TAGS and word not in blocked]
-    if matches:
-        return matches[-1]
-    return next((word for word in ("signal", "observation", "planet", "sample", "telescope")
-                 if word not in blocked), "")
+    """Choose a related offline target that is not stated in the source text."""
+    tokens = set(re.findall(r"[a-z]+", str(summary).casefold()))
+    excluded = tokens | (blocked or set())
+    source_tags = {tag for token in tokens for tag in WORD_TAGS.get(token, ())}
+    ranked = []
+    for word, tags in WORD_TAGS.items():
+        if word in excluded:
+            continue
+        overlap = len(source_tags.intersection(tags))
+        if overlap:
+            ranked.append((overlap / math.sqrt(len(tags) * max(1, len(source_tags))), word))
+    # Stable tie-breaking keeps replay deterministic while choosing a semantic
+    # neighbor (e.g. comet/meteor) instead of copying "observatory" verbatim.
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return ranked[0][1] if ranked else next(
+        (word for word in ("signal", "observation", "planet", "sample", "telescope")
+         if word not in excluded), "")

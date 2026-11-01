@@ -117,6 +117,7 @@ def init_db():
               "CREATE TABLE IF NOT EXISTS forgotten (viewer_id TEXT PRIMARY KEY, at TEXT NOT NULL)",
               "CREATE TABLE IF NOT EXISTS viewers (viewer_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, memory_enabled INTEGER NOT NULL DEFAULT 1)",
               "CREATE TABLE IF NOT EXISTS privacy_audit (id TEXT PRIMARY KEY, viewer_id TEXT NOT NULL, action TEXT NOT NULL, completed_at TEXT NOT NULL)",
+              "CREATE TABLE IF NOT EXISTS whisper_recipients (utc_day TEXT NOT NULL, viewer_id TEXT NOT NULL, sent_at TEXT NOT NULL, PRIMARY KEY(utc_day,viewer_id))",
               "CREATE TABLE IF NOT EXISTS overlay_commands (seq BIGSERIAL PRIMARY KEY, command_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at TEXT NOT NULL)",
               "CREATE TABLE IF NOT EXISTS lore_enrichments (lore_id TEXT PRIMARY KEY, summary TEXT NOT NULL, relic_title TEXT NOT NULL, power_name TEXT NOT NULL, power_text TEXT NOT NULL, boss_name TEXT NOT NULL, boss_epithet TEXT NOT NULL, provider TEXT NOT NULL, updated_at TEXT NOT NULL)",
             ]
@@ -145,6 +146,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS forgotten (viewer_id TEXT PRIMARY KEY, at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS viewers (viewer_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, memory_enabled INTEGER NOT NULL DEFAULT 1);
         CREATE TABLE IF NOT EXISTS privacy_audit (id TEXT PRIMARY KEY, viewer_id TEXT NOT NULL, action TEXT NOT NULL, completed_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS whisper_recipients (utc_day TEXT NOT NULL, viewer_id TEXT NOT NULL, sent_at TEXT NOT NULL, PRIMARY KEY(utc_day,viewer_id));
         CREATE TABLE IF NOT EXISTS overlay_commands (seq INTEGER PRIMARY KEY AUTOINCREMENT, command_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS lore_enrichments (lore_id TEXT PRIMARY KEY, summary TEXT NOT NULL, relic_title TEXT NOT NULL, power_name TEXT NOT NULL, power_text TEXT NOT NULL, boss_name TEXT NOT NULL, boss_epithet TEXT NOT NULL, provider TEXT NOT NULL, updated_at TEXT NOT NULL);
         """)

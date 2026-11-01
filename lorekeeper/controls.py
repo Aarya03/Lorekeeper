@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, threading, time, uuid
 from . import runtime
 from .runtime import db, lock, now, publish, stats
-from .projection import emit_event, speech_allowed, store_overlay_command
+from .projection import emit_event
 
 CAST=[("chat.message","pixel_pete","remember when chat took the unexpected route?"),
       ("chat.message","luna_lags","that surprise ending was unforgettable"),
@@ -114,15 +114,13 @@ def forget_viewer(viewer_id, display="viewer", ack=False):
         for row in rows:
             subjects=[x for x in json.loads(row["subjects"]) if x!=str(viewer_id)]
             if str(viewer_id) in json.loads(row["subjects"]) or len(subjects)==0:
-                affected_chapters=c.execute("SELECT id FROM chapters WHERE seed_lore_id=?",(row["id"],)).fetchall()
                 from .signal_game import forget_lore
                 forget_lore(c, row["id"])
-                for chapter in affected_chapters:
-                    c.execute("UPDATE chapters SET title='Recovered Archive',seed_lore='A community memory was removed at a viewer request.',intro='The Keeper has released this memory. The community can write a new chapter together.',result='This memory was removed at a viewer request.' WHERE id=?",(chapter["id"],))
-                    c.execute("UPDATE game_rounds SET boss_name='Released Echo',boss_epithet='A memory returned to its owner',relic_name='Community Relic' WHERE chapter_id=?",(chapter["id"],))
                 c.execute("DELETE FROM relics WHERE lore_id=?",(row["id"],))
                 c.execute("DELETE FROM lore_enrichments WHERE lore_id=?",(row["id"],))
                 c.execute("DELETE FROM lore WHERE id=?",(row["id"],))
+                from .story import cancel_missing_memory_chapters
+                cancel_missing_memory_chapters(c)
             else:
                 evidence=c.execute("SELECT evidence FROM lore WHERE id=?",(row["id"],)).fetchone()["evidence"]
                 evidence=[item for item in json.loads(evidence) if item not in evidence_ids]
@@ -149,15 +147,21 @@ def forget_viewer(viewer_id, display="viewer", ack=False):
         except Exception as exc: print(f"Could not clear a viewer cooldown from Redis: {exc}",flush=True)
     emit_event("privacy.viewer_forgotten","Viewer","Viewer memory deleted",source="control",mode="live",viewer_id=str(viewer_id),payload={"display_name":"Viewer","text":"Viewer memory deleted"})
     if ack:
-        reaction=None
-        with db() as c:
-            muted=c.execute("SELECT value FROM settings WHERE key='muted'").fetchone()["value"]=="true"
-            if not muted and speech_allowed(c,"chat.message",str(viewer_id),"!forgetme"):
-                reaction={"id":str(uuid.uuid4()),"text":"Your memory has been removed from the archive.","trigger":"privacy","viewer":"Lorekeeper","at":now(),"animation":"talk"}
-                c.execute("INSERT INTO utterances VALUES(?,?,?,?,?)",(reaction["id"],reaction["text"],"privacy","Lorekeeper",reaction["at"]))
-                store_overlay_command(c,reaction,"privacy:"+reaction["id"])
-        if reaction: publish({"kind":"reaction","reaction":reaction,"seq":reaction["seq"]})
+        from .twitch import enqueue_whisper
+        enqueue_whisper(str(viewer_id),"Lorekeeper deleted your saved Memory and game profile data. Future chat messages from this account will not be used to create Memories.",force=True)
     publish({"kind":"privacy","viewer":display})
     from .story import current_state
     chapter=current_state()
     if chapter and chapter["status"]=="VOTING": publish({"kind":"chapter","chapter":chapter})
+
+def remember_viewer(viewer_id, display="viewer"):
+    """Restore memory participation only after an explicit viewer opt-in."""
+    if not viewer_id: return
+    timestamp=now()
+    with lock, db() as c:
+        c.execute("DELETE FROM forgotten WHERE viewer_id=?",(str(viewer_id),))
+        c.execute("INSERT INTO viewers VALUES(?,?,?,?,1) ON CONFLICT(viewer_id) DO UPDATE SET display_name=excluded.display_name,last_seen=excluded.last_seen,memory_enabled=1",
+                  (str(viewer_id),str(display or "viewer"),timestamp,timestamp))
+    emit_event("privacy.viewer_reenabled",display,"Viewer opted back in to memory",source="control",mode="live",viewer_id=str(viewer_id),payload={"display_name":str(display or "viewer"),"text":"Viewer opted back in to memory"})
+    from .twitch import enqueue_whisper
+    enqueue_whisper(str(viewer_id),"Memory participation is enabled again. New eligible chat may be saved as a pending Memory for streamer approval.",force=True)

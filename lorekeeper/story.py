@@ -132,9 +132,26 @@ def _resolve(c, row):
     return c.execute("SELECT * FROM chapters WHERE id=?", (row["id"],)).fetchone()
 
 
+def cancel_missing_memory_chapters(c):
+    """Scrub and release chapters whose source Memory has been deleted."""
+    orphaned=c.execute("SELECT ch.id,ch.seed_lore_id FROM chapters ch LEFT JOIN lore l ON l.id=ch.seed_lore_id WHERE ch.seed_lore_id IS NOT NULL AND l.id IS NULL AND ch.status!='CANCELLED'").fetchall()
+    for chapter in orphaned:
+        chapter_id,lore_id=chapter["id"],chapter["seed_lore_id"]
+        from .signal_game import forget_lore
+        forget_lore(c,lore_id)
+        c.execute("DELETE FROM chapter_votes WHERE chapter_id=?",(chapter_id,))
+        c.execute("DELETE FROM chapter_relics WHERE chapter_id=?",(chapter_id,))
+        c.execute("DELETE FROM game_action_events WHERE round_id IN (SELECT id FROM game_rounds WHERE chapter_id=?)",(chapter_id,))
+        c.execute("DELETE FROM game_rounds WHERE chapter_id=?",(chapter_id,))
+        c.execute("DELETE FROM relics WHERE lore_id=?",(lore_id,))
+        c.execute("UPDATE chapters SET title='Memory withdrawn',seed_lore_id=NULL,seed_lore='Memory removed by viewer request',intro='This Round ended because its source Memory was removed.',choice_a='{}',choice_b='{}',status='CANCELLED',resolved_at=NULL,winning_choice=NULL,votes_a=0,votes_b=0,result='Round cancelled after its source Memory was deleted.' WHERE id=?",(chapter_id,))
+    return len(orphaned)
+
+
 def current_state():
     changed = False
     with lock, db() as c:
+        changed=bool(cancel_missing_memory_chapters(c))
         row = c.execute("SELECT * FROM chapters ORDER BY ordinal DESC LIMIT 1").fetchone()
         # Remove an unvoted placeholder chapter created by older builds when
         # there was no approved lore to seed it. A real observation is required
@@ -182,6 +199,7 @@ def recent_history(limit=5):
 
 def start_chapter():
     with lock, db() as c:
+        cancel_missing_memory_chapters(c)
         from .game import state as legacy_game_state
         legacy_game_state(c)  # Close any encounter left by an earlier app version.
         boss = c.execute("SELECT id FROM game_rounds WHERE status='ACTIVE' LIMIT 1").fetchone()

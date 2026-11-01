@@ -45,6 +45,7 @@ def _project_event(event):
     text=event.get("payload",{}).get("text","")
     viewer_id=str(event.get("viewer_id","unknown"))
     chapter_update=None
+    whisper_request=None
     with lock, db() as c:
         if c.execute("SELECT 1 FROM events WHERE id=?", (event["event_id"],)).fetchone():
             duplicates_total.inc()
@@ -82,7 +83,12 @@ def _project_event(event):
                 detect_moment(c, event_type)
             if event_type=="chat.message" and event.get("mode")=="live":
                 chapter_update=story.cast_vote(c,viewer_id,text)
-            reaction = make_reaction(c, event_type, viewer, text, viewer_id, event["event_id"])
+            if (event.get("source")=="twitch_eventsub" and event_type=="chat.message"
+                    and text.strip().lower().startswith("!whatdoyouknow")):
+                whisper_request=(viewer_id,viewer_status_message(c,viewer_id))
+                reaction=None
+            else:
+                reaction = make_reaction(c, event_type, viewer, text, viewer_id, event["event_id"])
         elif not publish_after_duplicate: reaction = None
     if publish_after_duplicate:
         publish(result)
@@ -92,6 +98,9 @@ def _project_event(event):
     publish({"kind":"event", "event":event, "reaction":reaction})
     if chapter_update: publish({"kind":"chapter", "chapter":chapter_update})
     if reaction: publish({"kind":"reaction", "reaction":reaction})
+    if whisper_request:
+        from .twitch import enqueue_whisper
+        enqueue_whisper(*whisper_request)
     _dispatch_game_action(event)
     return event
 
@@ -169,7 +178,6 @@ def speech_allowed(c,event_type,viewer_id,text):
     cooldowns={"subscription":5000,"gift_sub":5000,"follow":10000,"redemption":5000,"moment.detected":20000,"stream.online":20000,"chat.message":60000,"raid.incoming":0}
     cooldown=cooldowns.get(event_type,0)
     if event_type=="chat.message" and text.lower().startswith("!lore"): cooldown=15000
-    if event_type=="chat.message" and text.lower().startswith("!whatdoyouknow"): cooldown=15000
     if runtime.redis_client:
         try:
             channel=os.environ.get("TWITCH_CHANNEL_ID",runtime.twitch_tokens.get("user_id","local") if runtime.twitch_tokens else "local")
@@ -189,6 +197,7 @@ def speech_allowed(c,event_type,viewer_id,text):
 def make_reaction(c, event_type, viewer, text, viewer_id=None, source_event_id=None):
     muted = c.execute("SELECT value FROM settings WHERE key='muted'").fetchone()["value"] == "true"
     if muted: return None
+    if text.strip().lower().startswith("!whatdoyouknow"): return None
     trigger = event_type
     line = None
     lore = choose_lore(c, viewer, viewer_id, text)
@@ -198,12 +207,6 @@ def make_reaction(c, event_type, viewer, text, viewer_id=None, source_event_id=N
     elif event_type == "stream.online": line = "The archive is open. Chat's next chapter is ready!"
     elif event_type in ("subscription","gift_sub"): line = f"{viewer} just powered the legend. Thank you!"
     elif text.lower().startswith("!lore") and lore: line = f"The archives remember: {summarize_lore(lore['summary'])}"
-    elif text.lower().startswith("!whatdoyouknow"):
-        personal = c.execute("SELECT summary FROM lore WHERE status='ACTIVE' AND subjects LIKE ? ORDER BY created_at DESC LIMIT 1",(f'%"{viewer_id or viewer}"%',)).fetchone()
-        profile = c.execute("SELECT xp,title,streak FROM game_viewers WHERE viewer_id=?",(str(viewer_id or viewer),)).fetchone()
-        memory_text = f"I remember: {summarize_lore(personal['summary'])}" if personal else f"{viewer}, your page in the archive is still blank."
-        if profile: memory_text += f" Your title is {profile['title']} with {profile['xp']} XP across {profile['streak']} stream streak."
-        line = memory_text
     if not line and event_type == "follow": line = f"Welcome to the realm, {viewer}!"
     if not line or not speech_allowed(c,event_type,viewer_id or viewer,text): return None
     line = safe_line(line)
@@ -212,6 +215,22 @@ def make_reaction(c, event_type, viewer, text, viewer_id=None, source_event_id=N
     store_overlay_command(c,result,source_event_id or result["id"])
     stats["reactions"] += 1
     return result
+
+def viewer_status_message(c,viewer_id):
+    """Build a private, bounded account summary for Twitch Whisper delivery."""
+    personal=c.execute("SELECT summary FROM lore WHERE status='ACTIVE' AND subjects LIKE ? ORDER BY created_at DESC LIMIT 1",
+                       (f'%\"{viewer_id}\"%',)).fetchone()
+    profile=c.execute("SELECT xp,title,streak FROM game_viewers WHERE viewer_id=?",(str(viewer_id),)).fetchone()
+    parts=[]
+    if personal:
+        parts.append(f"Your saved Memory: {summarize_lore(personal['summary'])}")
+    else:
+        parts.append("You don't have any saved Memories in Lorekeeper yet.")
+    if profile:
+        parts.append(f"Your title is {profile['title']}; you have {profile['xp']} XP across a {profile['streak']}-stream streak.")
+    else:
+        parts.append("You haven't earned a game title or XP yet.")
+    return " ".join(parts)[:450]
 
 def safe_line(line):
     line = re.sub(r"https?://\S+|@[\w]+", "", line)

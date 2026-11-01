@@ -6,7 +6,7 @@ Lorekeeper pitch: **Chat hunts a hidden word drawn from its inside jokes, guided
 
 1. A streamer approves a recurring community observation. LM Studio can paraphrase it and create a research charm, a lore-boss name, and an accessible ability. If generation fails, curated templates are used.
 2. The streamer opens a field study. Viewers vote with `!vote A` or `!vote B`: A deploys the charm and reveals hint one immediately; B preserves the sample and extends the hunt by 20 seconds while keeping hint one sealed initially.
-3. The lore boss opens a 90-second signal hunt. Chat guesses with `!guess WORD`. Local embeddings compare each guess to the hidden lore-linked target and show shared heat; the exact word solves the encounter. Guesses are moderated and rate limited per viewer, and the target stays private until the round resolves.
+3. The lore boss opens a 90-second signal hunt. Chat guesses with `!guess WORD`. Local embeddings compare each guess to the hidden lore-linked target and show shared heat; the exact word solves the encounter. Guesses are moderated and rate limited per viewer, and the target stays private until the round resolves. If a Memory seeds multiple Hunts, Lorekeeper excludes answers already used for that Memory.
 4. The OBS overlay shows the lore boss, clue, timed hints, best heat, the five closest guesses with rank, recent guesses, and countdown.
 5. At round end, participants earn persistent XP and titles. The closest guess earns a bonus; tied closest guesses share it, and guesses that improve the shared best score earn assist credit. `!whatdoyouknow` reports a viewer's saved lore and game profile; `!forgetme` deletes both.
 
@@ -76,8 +76,8 @@ For a detailed real-Twitch test and rehearsal sequence, see [docs/live_twitch_te
 ## Privacy and safety
 
 - Lore stays pending until the streamer approves it.
-- Vote/game records use Twitch user IDs for deduplication and credit. `!forgetme` removes the viewer's derived lore, relics, chapter text derived from that memory, action history, XP/profile, and vote records, then suppresses future learning and game actions for that account.
-- `!whatdoyouknow` reports the viewer's saved lore and game title/XP. A forgotten account receives an empty-memory response.
+- Vote/game records use Twitch user IDs for deduplication and credit. `!forgetme` removes the viewer's derived lore, relics, chapter text derived from that memory, action history, XP/profile, and vote records, then suppresses future learning and game actions for that account. Any chapter whose source Memory is deleted is scrubbed and cancelled so it cannot block later hunts; another approved Memory can seed the next chapter.
+- `!whatdoyouknow` sends the viewer their saved Memory and game title/XP through a private Twitch Whisper; it is not shown on the shared overlay. `!forgetme` deletes the viewer's data, suppresses future learning, and privately whispers a confirmation. The viewer can explicitly opt back in later with `!rememberme`; new Memories still require streamer approval. Twitch authorization needs `user:manage:whispers`, a verified sender phone number, and recipients who accept Whispers; delivery can be blocked by recipient settings and Twitch may silently filter messages.
 - The dashboard panic mute immediately stops mascot speech.
 - Twitch tokens are encrypted at rest in `data/twitch_tokens.bin`. Keep `.env` and its key private.
 - Raw events are retained for seven days by default. Redpanda is append-only, so raw log records can remain until topic retention expires.
@@ -85,6 +85,82 @@ For a detailed real-Twitch test and rehearsal sequence, see [docs/live_twitch_te
 ## Architecture and observability
 
 `server.py` composes the application. `lorekeeper/twitch.py` handles OAuth and EventSub, `lorekeeper/projection.py` projects live events/lore and sends `!guess` events into the durable `game.actions` topic, `lorekeeper/signal_game.py` grades semantic guesses and manages live encounters, `lorekeeper/narrator.py` provides local LM Studio story enrichment with template fallback, `lorekeeper/relics.py` manages stream-aware artifacts, and `lorekeeper/story.py` manages chapter votes. `lorekeeper/http.py` serves the dashboard/API and overlay. The Compose deployment runs these application modules with PostgreSQL, Redpanda, and Redis as separate services.
+
+```mermaid
+flowchart LR
+  subgraph People[People and stream]
+    Viewer[Viewers]
+    Chat[Twitch chat]
+    Streamer[Streamer]
+    Dashboard[Streamer dashboard]
+    OBS[OBS browser overlay]
+  end
+
+  subgraph Twitch[Twitch]
+    OAuth[Twitch OAuth]
+    EventSub[EventSub WebSocket]
+  end
+
+  subgraph App[Lorekeeper application]
+    Ingress[Twitch adapter]
+    HTTP[Dashboard and HTTP API]
+    Projection[Event projection and safety filters]
+    Story[Memory and chapter service]
+    Relics[Relic service]
+    Hunt[Signal Hunt, scoring, and viewer XP]
+    Narrator[Local narrator with template fallback]
+    SSE[Server-sent updates]
+  end
+
+  subgraph Data[Data and event services]
+    Raw[(Redpanda events.raw)]
+    Actions[(Redpanda game.actions)]
+    DLQ[(Redpanda dead-letter topic)]
+    PG[(PostgreSQL and pgvector)]
+    Redis[(Redis rate limits)]
+  end
+
+  subgraph LocalAI[Optional local LM Studio]
+    LLM[Text generation]
+    Embed[Embedding model]
+  end
+
+  subgraph Observe[Observability]
+    Metrics[Prometheus]
+    Grafana[Grafana]
+  end
+
+  Viewer --> Chat
+  Streamer --> Dashboard --> HTTP
+  HTTP --> Dashboard
+  Dashboard --> OAuth
+  OAuth -->|authorization callback| HTTP
+  Chat --> EventSub --> Ingress --> Raw
+  Raw --> Projection
+  Projection --> PG
+  Projection --> Story
+  Projection -->|!guess actions| Actions --> Hunt
+  Story --> Relics
+  Story --> Narrator
+  Relics --> PG
+  Story --> PG
+  Hunt --> PG
+  Hunt <-->|target and guess vectors| Embed
+  Narrator <-->|approved Memory and story copy| LLM
+  HTTP --> Story
+  HTTP --> Relics
+  HTTP --> PG
+  Projection <--> Redis
+  HTTP --> SSE
+  Projection --> SSE
+  Hunt --> SSE
+  SSE --> Dashboard
+  SSE --> OBS
+  HTTP -->|/metrics| Metrics --> Grafana
+  Projection -. failed records .-> DLQ
+```
+
+**Flow:** Twitch chat enters through EventSub and is appended to Redpanda before the projection updates PostgreSQL. Chat guesses use a separate `game.actions` topic. The dashboard and OBS overlay read the resulting state through HTTP and server-sent updates. Local embeddings score Hunt words; the optional text model receives approved Memory/story context, with template fallbacks if unavailable. Prometheus scrapes application metrics for Grafana.
 
 Check readiness at `http://localhost:8787/api/ready` and metrics at `http://localhost:8787/metrics`. The dashboard's **Rehearsal & safety** panel includes a raid replay, a prompt-injection profile, and a 1,000-event load run; all are explicitly synthetic and cannot create lore. For a sustained load report, run `python tools/load_test.py --duration 60 --rate 10000`; report measured results, not the requested target. Synthetic replay/load traffic is for engineering rehearsal and is not a substitute for the real Twitch demo.
 
@@ -106,6 +182,25 @@ Check readiness at `http://localhost:8787/api/ready` and metrics at `http://loca
 | GET | `/api/ready` | Database, event log, and Redis readiness |
 | GET | `/metrics` | Prometheus metrics |
 
+
 ## Hackathon submission
 
 The [Codex x TwitchCon Hackathon](https://twitchcon-codex.devpost.com/) asks for the project repository, a public YouTube demo up to three minutes, a project description, and the Codex session ID. The demo should show this chapter loop working on a real Twitch channel and include how Codex was used to build it.
+
+### Codex Session Details
+
+```text
+>_ OpenAI Codex (v0.164.0)
+
+Model:              GPT-6-Luna (reasoning medium, summaries auto)
+Model Provider:     OpenAI
+Directory:          ~\OneDrive\Desktop\Lorekeeper
+Permissions:        Workspace (granular)
+Agents.md:          <none>
+Account:            aaryavartjoshi@gmail.com (Go)
+Collaboration Mode: Default
+Session ID:         01a17e90-6f6b-7640-b71f-e99fa3e451b9
+
+Monthly Limit:      [████████████████████] 100% left (resets 23:42 on 26 Nov)
+Usage Reset:        1 reset available (run /usage)
+```
