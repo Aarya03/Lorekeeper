@@ -18,12 +18,14 @@ from . import embeddings, runtime
 
 _VOCABULARY = Path(__file__).resolve().parent / "resources" / "heat_reference_vocabulary.txt"
 _CACHE_MAGIC = b"LKHEAT01"
-_BATCH_SIZE = 128
+_BATCH_SIZE = 512
 _INDEX_LOCK = threading.Lock()
 _INDEX = None
 _WARMUP_LOCK = threading.Lock()
 _WARMUP_STATE = "idle"
 _WARMUP_ERROR = ""
+_WARMUP_COMPLETED = 0
+_WARMUP_TOTAL = 0
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,30 @@ def _write_cache(path: Path, fingerprint: str, count: int, dimensions: int, valu
             temporary.unlink(missing_ok=True)
 
 
+def _read_partial_cache(path: Path, expected_values: int) -> array.array:
+    """Read completed vectors from an interrupted warmup checkpoint."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return array.array("f")
+    if len(raw) > expected_values * 4:
+        path.unlink(missing_ok=True)
+        return array.array("f")
+    # A process can stop in the middle of a write. Keep only complete floats;
+    # the caller additionally resumes only on complete embedding boundaries.
+    usable = len(raw) - (len(raw) % 4)
+    values = array.array("f")
+    values.frombytes(raw[:usable])
+    return values
+
+
+def _set_warmup_progress(completed: int, total: int) -> None:
+    global _WARMUP_COMPLETED, _WARMUP_TOTAL
+    with _WARMUP_LOCK:
+        _WARMUP_COMPLETED = max(0, int(completed))
+        _WARMUP_TOTAL = max(0, int(total))
+
+
 def reference_index() -> ReferenceIndex:
     """Load cached vectors or embed the bundled reference vocabulary once."""
     global _INDEX
@@ -132,16 +158,37 @@ def reference_index() -> ReferenceIndex:
                 cache = _cache_path(fingerprint)
                 vectors = _read_cache(cache, fingerprint, len(words), dimensions)
             if vectors is None:
-                print(f"Embedding {len(words):,} heat reference words with {identity['provider']} ({identity.get('model', 'local')})", flush=True)
-                embedded = embeddings.embed_semantic_many(list(words), timeout_seconds=30, batch_size=_BATCH_SIZE)
-                if len(embedded) != len(words):
-                    raise RuntimeError("Embedding provider returned an incomplete reference vocabulary")
-                vectors = array.array("f")
-                for vector in embedded:
-                    if len(vector) != dimensions:
-                        raise ValueError(f"Reference embedding dimension {len(vector)} does not match {dimensions}")
-                    vectors.extend(float(value) for value in vector)
+                partial = Path(str(cache) + ".partial")
+                expected_values = len(words) * dimensions
+                vectors = _read_partial_cache(partial, expected_values)
+                complete_words = len(vectors) // dimensions
+                # Resume from the last whole word. Discard any interrupted tail.
+                del vectors[complete_words * dimensions:]
+                complete_words = min(complete_words, len(words))
+                with partial.open("wb") as target:
+                    target.write(vectors.tobytes())
+                print(f"Embedding heat reference words with {identity['provider']} ({identity.get('model', 'local')}): {complete_words:,}/{len(words):,} cached", flush=True)
+                _set_warmup_progress(complete_words, len(words))
+                for offset in range(complete_words, len(words), _BATCH_SIZE):
+                    batch_words = list(words[offset:offset + _BATCH_SIZE])
+                    embedded = embeddings.embed_semantic_many(batch_words, timeout_seconds=60, batch_size=_BATCH_SIZE)
+                    if len(embedded) != len(batch_words):
+                        raise RuntimeError(f"Embedding provider returned {len(embedded)} vectors for {len(batch_words)} reference words")
+                    batch_vectors = array.array("f")
+                    for vector in embedded:
+                        if len(vector) != dimensions:
+                            raise ValueError(f"Reference embedding dimension {len(vector)} does not match {dimensions}")
+                        batch_vectors.extend(float(value) for value in vector)
+                    with partial.open("ab") as target:
+                        target.write(batch_vectors.tobytes())
+                        target.flush()
+                        os.fsync(target.fileno())
+                    vectors.extend(batch_vectors)
+                    complete_words += len(batch_words)
+                    _set_warmup_progress(complete_words, len(words))
+                    print(f"Heat reference embeddings: {complete_words:,}/{len(words):,}", flush=True)
                 _write_cache(cache, fingerprint, len(words), dimensions, vectors)
+                partial.unlink(missing_ok=True)
                 print(f"Cached heat reference embeddings at {cache}", flush=True)
         _INDEX = ReferenceIndex(words=words, vectors=vectors, dimensions=dimensions, fingerprint=fingerprint)
         return _INDEX
@@ -155,17 +202,19 @@ def warm_reference_cache() -> ReferenceIndex:
 def reference_warmup_status() -> dict:
     with _WARMUP_LOCK:
         return {"ready": _INDEX is not None, "state": "ready" if _INDEX is not None else _WARMUP_STATE,
-                "error": _WARMUP_ERROR}
+                "error": _WARMUP_ERROR, "completed": _WARMUP_COMPLETED, "total": _WARMUP_TOTAL}
 
 
 def begin_reference_warmup() -> None:
     """Warm the reference vectors off the HTTP startup path; retry after failures."""
-    global _WARMUP_STATE, _WARMUP_ERROR
+    global _WARMUP_STATE, _WARMUP_ERROR, _WARMUP_COMPLETED, _WARMUP_TOTAL
     with _WARMUP_LOCK:
         if _INDEX is not None or _WARMUP_STATE == "warming":
             return
         _WARMUP_STATE = "warming"
         _WARMUP_ERROR = ""
+        _WARMUP_COMPLETED = 0
+        _WARMUP_TOTAL = 0
 
     def warm():
         global _WARMUP_STATE, _WARMUP_ERROR

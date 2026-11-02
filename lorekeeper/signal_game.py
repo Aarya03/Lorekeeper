@@ -112,8 +112,12 @@ def start(chapter_id=None, mode="live"):
         if calibration["state"] in ("idle", "error"):
             heat.begin_reference_warmup()
         if calibration["state"] == "error":
-            return None, f"Semantic heat calibration needs attention: {calibration['error']}. Check the local embedding server and retry."
-        return None, "Semantic heat calibration is warming up. Wait for the reference vocabulary to finish loading, then start the Hunt again."
+            return None, f"Semantic heat calibration failed: {calibration['error']}. A retry has started; check the Lorekeeper logs if it fails again."
+        if calibration["state"] == "warming":
+            completed, total = calibration.get("completed", 0), calibration.get("total", 0)
+            progress = f"{completed:,}/{total:,} reference words" if total else "preparing the reference vocabulary"
+            return None, f"Semantic heat calibration is still running ({progress}). Wait for it to finish, then start the Hunt again."
+        return None, "Semantic heat calibration is starting. Refresh shortly for progress, then start the Hunt again."
     if not _start_lock.acquire(blocking=False):
         return None, "The Keeper is preparing this signal hunt. Try again in a moment."
     try:

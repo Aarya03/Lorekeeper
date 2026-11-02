@@ -190,6 +190,7 @@ function formatClock(seconds) {
 function renderHunt(state) {
   const game = state.game || {status:'IDLE'};
   const chapter = state.chapter;
+  const calibration = state.heat_calibration || {};
   const hasGame = Boolean(game.id);
   const active = game.status === 'ACTIVE';
   const canStartLive = chapter?.status === 'RESOLVED' && !(game.chapter_id === chapter.id && game.mode === 'live') && !active;
@@ -197,11 +198,21 @@ function renderHunt(state) {
   $('#boss-idle').classList.toggle('hide', hasGame);
   $('#boss-live').classList.toggle('hide', !hasGame);
   $('#start-boss').classList.toggle('hide', !canStartLive);
-  $('#start-boss').disabled = !window.lorekeeperLive;
+  $('#start-boss').disabled = !window.lorekeeperLive || calibration.state === 'warming';
+  $('#start-boss').textContent = calibration.state === 'error' ? 'Retry heat calibration' : 'Start Hunt';
   $('#boss-replay').disabled = !chapter || chapter.status !== 'RESOLVED' || active;
   if (!hasGame) {
-    $('#boss-idle strong').textContent = chapter?.status === 'RESOLVED' ? 'The Hunt is ready.' : 'Approve a memory to begin.';
-    $('#boss-idle span').textContent = chapter?.status === 'RESOLVED' ? 'Start the Hunt; chat then guesses with !guess WORD.' : 'Start with a memory, then hold a vote.';
+    if (calibration.state === 'error') {
+      $('#boss-idle strong').textContent = 'Heat calibration failed.';
+      $('#boss-idle span').textContent = `${calibration.error || 'Check the embedding service and Lorekeeper logs.'} Use Retry heat calibration after fixing the cause.`;
+    } else if (calibration.state === 'warming') {
+      const progress = calibration.total ? `${Number(calibration.completed||0).toLocaleString()}/${Number(calibration.total).toLocaleString()} words` : 'Preparing vocabulary';
+      $('#boss-idle strong').textContent = 'Calibrating semantic heat';
+      $('#boss-idle span').textContent = `${progress} embedded. This can take a few minutes on the first run; progress is saved so it can resume after a restart.`;
+    } else {
+      $('#boss-idle strong').textContent = chapter?.status === 'RESOLVED' ? 'The Hunt is ready.' : 'Approve a memory to begin.';
+      $('#boss-idle span').textContent = chapter?.status === 'RESOLVED' ? 'Start the Hunt; chat then guesses with !guess WORD.' : 'Start with a memory, then hold a vote.';
+    }
     return;
   }
   $('#boss-name').textContent = `${game.boss_name || 'Hunt'}${game.relic_name ? ` · ${game.relic_name}` : ''}`;

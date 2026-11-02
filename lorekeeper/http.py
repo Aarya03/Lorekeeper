@@ -3,7 +3,7 @@ import html, json, os, queue, re, secrets, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from . import runtime, twitch, controls, story, relics, game, signal_game
+from . import runtime, twitch, controls, story, relics, game, signal_game, heat
 from .memory import summarize_lore
 from .runtime import ROOT, db, listeners, lock, now, publish, stats, time_cutoff
 
@@ -33,6 +33,7 @@ def get_state():
         totals={"received":c.execute("SELECT count(*) n FROM events").fetchone()["n"],"reactions":c.execute("SELECT count(*) n FROM utterances").fetchone()["n"]}
     llm_provider=os.environ.get("LOREKEEPER_LLM_PROVIDER","none").strip().casefold()
     state = {"events":[dict(x) for x in events],"lore":lore,"lore_counts":lore_counts,"relics":relic_inventory,"stream_context":relic_stream_context,"moments":[dict(x) for x in moments],"utterances":[dict(x) for x in utterances],"chapter":story.current_state(),"chapter_history":story.recent_history(),"game":signal_game.state(),"narrator_provider":"LM Studio configured · local" if llm_provider in ("lm_studio","lmstudio") else "Curated templates","muted":muted,"pending":pending,"stats":{**stats,**totals,"uptime":int(time.time()-stats['started_at'])},"pipeline":pipeline_snapshot(recent_events),"load_test":controls.load_status.copy(),"event_log":"redpanda" if runtime.event_bus else "sqlite-local","twitch_connected":twitch.twitch_status["connected"],"twitch_eventsub":twitch.twitch_status["eventsub"],"twitch_authenticated":bool(twitch.twitch_tokens),"twitch_channel":twitch.twitch_status["channel"],"twitch_login":twitch.twitch_status["login"],"twitch_error":twitch.twitch_status["error"],"twitch_subscriptions":twitch.twitch_status["subscriptions"]}
+    state["heat_calibration"] = heat.reference_warmup_status()
     authorized_scopes=set((twitch.twitch_tokens or {}).get("scope",[]))
     state["twitch_whisper_enabled"]="user:manage:whispers" in authorized_scopes
     state["twitch_whisper_status"]=twitch.twitch_status.get("whisper_status","")
